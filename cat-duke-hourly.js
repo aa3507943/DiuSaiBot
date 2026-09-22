@@ -411,6 +411,10 @@ async function clickPlayerAvatar(
       break;
     }
 
+    console.log(
+      `第 ${attempt} 次尚未取得 ${playerName} 有效座標...`
+    );
+
     await page.waitForTimeout(
       500
     );
@@ -451,11 +455,115 @@ async function clickPlayerAvatar(
   await page.mouse.up();
 
   await page.waitForTimeout(
-    800
+    500
   );
 
   console.log(
     `✅ 已點擊 ${playerName}`
+  );
+}
+
+/* =========================================================
+   WAIT FOR RECENT PANEL
+========================================================= */
+
+async function waitForRecentPanel(
+  page
+) {
+  console.log(
+    "等待右側最近紀錄面板..."
+  );
+
+  for (
+    let attempt = 1;
+    attempt <= 20;
+    attempt++
+  ) {
+    const found =
+      await page.evaluate(
+        () => {
+          const all =
+            [
+              ...document.querySelectorAll(
+                "body *"
+              ),
+            ];
+
+          for (
+            const el of all
+          ) {
+            const rect =
+              el.getBoundingClientRect();
+
+            const style =
+              getComputedStyle(
+                el
+              );
+
+            const visible =
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.display !==
+                "none" &&
+              style.visibility !==
+                "hidden" &&
+              Number(
+                style.opacity || 1
+              ) !== 0;
+
+            if (!visible) {
+              continue;
+            }
+
+            const text =
+              (
+                el.innerText ||
+                el.textContent ||
+                ""
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
+
+            if (
+              text.includes(
+                "最近紀錄"
+              )
+            ) {
+              return true;
+            }
+          }
+
+          return false;
+        }
+      );
+
+    if (found) {
+      console.log(
+        `✅ 最近紀錄面板已出現，第 ${attempt} 次確認成功`
+      );
+
+      return;
+    }
+
+    console.log(
+      `第 ${attempt} 次尚未看到最近紀錄，繼續等待...`
+    );
+
+    await page.waitForTimeout(
+      500
+    );
+  }
+
+  await safeScreenshot(
+    page,
+    "recent-panel-timeout.png"
+  );
+
+  throw new Error(
+    "點擊自己後，10 秒內仍未出現最近紀錄面板"
   );
 }
 
@@ -470,13 +578,27 @@ async function readRecentRecords(
     `讀取 ${USER_NAME} 右側最近紀錄...`
   );
 
+  /*
+   * 點自己
+   */
   await clickPlayerAvatar(
     page,
     USER_NAME
   );
 
+  /*
+   * 真正等待最近紀錄 panel
+   */
+  await waitForRecentPanel(
+    page
+  );
+
+  /*
+   * panel 出現後再留一點時間，
+   * 讓裡面的內容完成 render
+   */
   await page.waitForTimeout(
-    1000
+    500
   );
 
   const result =
@@ -514,9 +636,7 @@ async function readRecentRecords(
           ];
 
         /*
-         * 先確認「最近紀錄」區存在。
-         *
-         * 這一步跟「今天沒有人丟」分開判斷。
+         * 找「最近紀錄」區塊
          */
         const recentTitleCandidates =
           all.filter(
@@ -543,10 +663,6 @@ async function readRecentRecords(
             }
           );
 
-        /*
-         * 完全沒有最近紀錄區：
-         * 視為 UI / DOM 異常。
-         */
         if (
           recentTitleCandidates.length ===
           0
@@ -567,15 +683,8 @@ async function readRecentRecords(
         }
 
         /*
-         * 找同時包含：
-         *
-         * 最近紀錄
-         * 丟了
-         *
-         * 的容器。
-         *
-         * 如果沒有，代表紀錄區存在，
-         * 但目前沒有被丟紀錄。
+         * 有最近紀錄區，
+         * 但是否真的有「丟了」
          */
         const recentContainers =
           recentTitleCandidates.filter(
@@ -598,6 +707,10 @@ async function readRecentRecords(
             }
           );
 
+        /*
+         * 最近紀錄區存在，
+         * 但沒有任何被丟紀錄。
+         */
         if (
           recentContainers.length ===
           0
@@ -618,8 +731,7 @@ async function readRecentRecords(
         }
 
         /*
-         * 面積最小的容器優先，
-         * 避免抓到整個右側 panel。
+         * 面積最小優先
          */
         recentContainers.sort(
           (a, b) => {
@@ -645,18 +757,16 @@ async function readRecentRecords(
           [
             container,
 
-            ...container
-              .querySelectorAll(
-                "*"
-              ),
+            ...container.querySelectorAll(
+              "*"
+            ),
           ];
 
         const candidates =
           [];
 
         for (
-          const el
-          of descendants
+          const el of descendants
         ) {
           if (!visible(el)) {
             continue;
@@ -735,9 +845,6 @@ async function readRecentRecords(
           }
         );
 
-        /*
-         * 先去除完全相同的 DOM 文字
-         */
         const unique =
           [];
 
@@ -745,8 +852,7 @@ async function readRecentRecords(
           new Set();
 
         for (
-          const item
-          of candidates
+          const item of candidates
         ) {
           if (
             seen.has(
@@ -768,16 +874,11 @@ async function readRecentRecords(
         const records =
           [];
 
-        /*
-         * 用 sender + item 再去除
-         * 父子 DOM 重複。
-         */
         const recordKeys =
           new Set();
 
         for (
-          const item
-          of unique
+          const item of unique
         ) {
           const throwIndex =
             item.text.indexOf(
@@ -814,11 +915,7 @@ async function readRecentRecords(
           }
 
           /*
-           * 去掉名字前面的 emoji
-           *
-           * 🩴 山大王
-           * →
-           * 山大王
+           * 移除 sender 前面的 emoji
            */
           sender =
             sender
@@ -829,13 +926,7 @@ async function readRecentRecords(
               .trim();
 
           /*
-           * 去除尾端時間：
-           *
-           * 6 小時前
-           * 10 分鐘前
-           * 30 秒前
-           * 1 天前
-           * 剛剛
+           * 移除尾端時間
            */
           let thrownItem =
             rest
@@ -850,7 +941,7 @@ async function readRecentRecords(
               .trim();
 
           /*
-           * 父容器裡可能包含多筆「丟了」
+           * 排除包含多筆紀錄的大父容器
            */
           if (
             thrownItem.includes(
@@ -875,6 +966,9 @@ async function readRecentRecords(
             continue;
           }
 
+          /*
+           * DOM 父子節點去重
+           */
           const recordKey =
             `${sender}|${thrownItem}`;
 
@@ -905,10 +999,8 @@ async function readRecentRecords(
         }
 
         /*
-         * 如果有「丟了」文字，
-         * 但完全解析不到，
-         * 這不是「沒人丟」，
-         * 而是格式改變。
+         * 有「丟了」但解析不到，
+         * 視為格式異常。
          */
         if (
           records.length ===
@@ -937,14 +1029,12 @@ async function readRecentRecords(
             a.y - b.y
         );
 
-        const latest =
-          records[0];
-
         return {
           status:
             "OK",
 
-          latest,
+          latest:
+            records[0],
 
           records,
 
@@ -955,8 +1045,7 @@ async function readRecentRecords(
     );
 
   /*
-   * 情況 1：
-   * 最近紀錄區根本不存在
+   * 最近紀錄 panel 消失
    */
   if (
     result.status ===
@@ -968,14 +1057,14 @@ async function readRecentRecords(
     );
 
     throw new Error(
-      "找不到最近紀錄區塊，可能是頁面尚未載入或網站 DOM 已變更"
+      "最近紀錄面板已出現過，但解析時找不到，可能 UI 又重新 render"
     );
   }
 
   /*
-   * 情況 2：
-   * 最近紀錄區存在，
-   * 但今天沒有人丟你。
+   * 沒人丟
+   *
+   * 正常結束
    */
   if (
     result.status ===
@@ -1002,8 +1091,7 @@ async function readRecentRecords(
   }
 
   /*
-   * 情況 3：
-   * 有紀錄，但格式解析失敗
+   * 有紀錄但解析失敗
    */
   if (
     result.status ===
@@ -1028,7 +1116,7 @@ async function readRecentRecords(
     );
 
     throw new Error(
-      "最近紀錄存在，但無法解析，可能是網站紀錄格式已變更"
+      "最近紀錄存在，但無法解析，可能網站紀錄格式已變更"
     );
   }
 
@@ -1120,8 +1208,7 @@ async function getThrowControls(
         [];
 
       for (
-        const el
-        of all
+        const el of all
       ) {
         if (
           forbidden.has(
@@ -1229,10 +1316,6 @@ async function openThrowPanel(
     if (
       controls.length > 0
     ) {
-      /*
-       * 小元素優先，
-       * 避免點到父容器。
-       */
       controls.sort(
         (a, b) =>
           a.width *
@@ -1277,6 +1360,10 @@ async function openThrowPanel(
 
       return;
     }
+
+    console.log(
+      `第 ${attempt} 次尚未找到「丟東西」，繼續等待...`
+    );
 
     await page.waitForTimeout(
       300
@@ -1348,8 +1435,7 @@ async function findAvailableItems(
         [];
 
       for (
-        const el
-        of all
+        const el of all
       ) {
         if (
           forbidden.has(
@@ -1366,9 +1452,6 @@ async function findAvailableItems(
         const rect =
           el.getBoundingClientRect();
 
-        /*
-         * 排除巨大容器
-         */
         if (
           rect.width > 350 ||
           rect.height > 250
@@ -1487,21 +1570,13 @@ async function findAvailableItems(
 
         candidates.push({
           name,
-
           text,
-
           title,
-
           aria,
-
           alt,
-
           dataItem,
-
           dataName,
-
           dataId,
-
           explicit,
 
           tag:
@@ -1534,7 +1609,7 @@ async function findAvailableItems(
       }
 
       /*
-       * 同座標父子 DOM 去重
+       * 同座標去重
        */
       const unique =
         [];
@@ -1565,10 +1640,6 @@ async function findAvailableItems(
         );
       }
 
-      /*
-       * data-item / data-name
-       * 優先。
-       */
       unique.sort(
         (a, b) => {
           if (
@@ -1702,7 +1773,7 @@ async function executeRetaliation(
   );
 
   /*
-   * 點最新攻擊者
+   * 點攻擊者
    */
   await clickPlayerAvatar(
     page,
@@ -1710,7 +1781,7 @@ async function executeRetaliation(
   );
 
   /*
-   * 打開丟東西
+   * 開丟東西
    */
   await openThrowPanel(
     page
@@ -1729,8 +1800,8 @@ async function executeRetaliation(
   ) {
     try {
       /*
-       * 每次重新抓 DOM，
-       * 避免點完後 UI rerender。
+       * 每一次重新找道具，
+       * 避免 UI rerender
        */
       const items =
         await waitForThrowItems(
@@ -1765,9 +1836,6 @@ async function executeRetaliation(
         `隨機選到：${selected.name}`
       );
 
-      /*
-       * 真實滑鼠點擊
-       */
       await page.mouse.move(
         selected.x,
         selected.y
@@ -1817,9 +1885,6 @@ async function executeRetaliation(
     }
   }
 
-  /*
-   * 統計本次道具
-   */
   const stats =
     {};
 
@@ -1827,13 +1892,9 @@ async function executeRetaliation(
     const itemName
     of throwLog
   ) {
-    stats[
-      itemName
-    ] =
+    stats[itemName] =
       (
-        stats[
-          itemName
-        ] ||
+        stats[itemName] ||
         0
       ) + 1;
   }
@@ -1943,9 +2004,7 @@ async function executeRetaliation(
     );
 
     /*
-     * 2. 點自己
-     *
-     * 3. 讀最近紀錄
+     * 2. 找最新攻擊者
      */
     const latest =
       await readRecentRecords(
@@ -1953,8 +2012,9 @@ async function executeRetaliation(
       );
 
     /*
-     * 沒有人丟：
-     * 正常結束，不反擊。
+     * 沒人丟你
+     *
+     * 正常結束
      */
     if (!latest) {
       console.log("");
@@ -1970,7 +2030,7 @@ async function executeRetaliation(
     }
 
     /*
-     * 額外安全檢查
+     * 安全檢查
      */
     if (
       !latest.sender
@@ -1990,7 +2050,7 @@ async function executeRetaliation(
     }
 
     /*
-     * 4. 真正反擊
+     * 3. 真正反擊
      */
     const result =
       await executeRetaliation(
