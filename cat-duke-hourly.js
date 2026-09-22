@@ -23,7 +23,7 @@ const THROW_COUNT =
 
 const CLICK_GAP_MS =
   Number(
-    process.env.CLICK_GAP_MS || "1000"
+    process.env.CLICK_GAP_MS || "2000"
   );
 
 const sleep = (ms) =>
