@@ -1,9 +1,6 @@
 name: Cat Duke Hourly
 
 on:
-  schedule:
-    - cron: "30 * * * *"
-
   workflow_dispatch:
 
 concurrency:
