@@ -18,21 +18,85 @@ const HEADLESS =
 
 const THROW_COUNT =
   Number(
-    process.env.THROW_COUNT ||
-    "1"
+    process.env.THROW_COUNT || "1"
   );
 
 const CLICK_GAP_MS =
   Number(
-    process.env.CLICK_GAP_MS ||
-    "1000"
+    process.env.CLICK_GAP_MS || "1000"
   );
 
 const sleep = (ms) =>
-  new Promise(
-    (resolve) =>
-      setTimeout(resolve, ms)
+  new Promise((resolve) =>
+    setTimeout(resolve, ms)
   );
+
+/* =========================================================
+   VALID THROW ITEMS
+========================================================= */
+
+/*
+ * 只允許真正存在於丟東西面板的道具。
+ */
+const VALID_ITEM_NAMES = [
+  "小魚乾",
+  "貓罐頭",
+  "拖鞋",
+  "金幣",
+  "逗貓棒",
+  "紙箱",
+  "幼蟲",
+  "羊毛",
+  "雞蛋",
+  "銀幣",
+  "德卡",
+  "M幣",
+  "喵幣",
+  "貓黃金",
+  "糖果",
+  "千把劍",
+  "愛心",
+];
+
+function normalizeText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getValidItemName(value) {
+  const clean =
+    normalizeText(value);
+
+  for (
+    const validName
+    of VALID_ITEM_NAMES
+  ) {
+    if (
+      clean === validName ||
+      clean.includes(validName)
+    ) {
+      return validName;
+    }
+  }
+
+  /*
+   * UI 上被截斷為「裝水的...」
+   */
+  if (
+    clean.startsWith("裝水的")
+  ) {
+    return clean;
+  }
+
+  return null;
+}
+
+function isValidItemName(name) {
+  return Boolean(
+    getValidItemName(name)
+  );
+}
 
 /* =========================================================
    CONFIG CHECK
@@ -50,9 +114,7 @@ if (
 }
 
 if (
-  !Number.isInteger(
-    THROW_COUNT
-  ) ||
+  !Number.isInteger(THROW_COUNT) ||
   THROW_COUNT < 1 ||
   THROW_COUNT > 100
 ) {
@@ -64,9 +126,7 @@ if (
 }
 
 if (
-  !Number.isFinite(
-    CLICK_GAP_MS
-  ) ||
+  !Number.isFinite(CLICK_GAP_MS) ||
   CLICK_GAP_MS < 100
 ) {
   console.error(
@@ -109,7 +169,6 @@ async function login(page) {
   await page.goto(URL, {
     waitUntil:
       "domcontentloaded",
-
     timeout:
       30000,
   });
@@ -129,7 +188,6 @@ async function login(page) {
         {
           name:
             "登入",
-
           exact:
             true,
         }
@@ -139,7 +197,6 @@ async function login(page) {
   await loginButton.waitFor({
     state:
       "visible",
-
     timeout:
       10000,
   });
@@ -156,15 +213,12 @@ async function login(page) {
 
   const select =
     page
-      .locator(
-        "select"
-      )
+      .locator("select")
       .first();
 
   await select.waitFor({
     state:
       "visible",
-
     timeout:
       5000,
   });
@@ -179,12 +233,9 @@ async function login(page) {
   );
 
   const inputs =
-    page.locator(
-      "input"
-    );
+    page.locator("input");
 
-  let pinInput =
-    null;
+  let pinInput = null;
 
   const count =
     await inputs.count();
@@ -200,46 +251,30 @@ async function login(page) {
     const isVisible =
       await input
         .isVisible()
-        .catch(
-          () => false
-        );
+        .catch(() => false);
 
     if (!isVisible) {
       continue;
     }
 
     const type =
-      (
-        await input
-          .getAttribute(
-            "type"
-          )
-      ) || "";
+      (await input.getAttribute(
+        "type"
+      )) || "";
 
     const placeholder =
-      (
-        await input
-          .getAttribute(
-            "placeholder"
-          )
-      ) || "";
+      (await input.getAttribute(
+        "placeholder"
+      )) || "";
 
     if (
-      type ===
-        "password" ||
+      type === "password" ||
       placeholder
         .toLowerCase()
-        .includes(
-          "pin"
-        ) ||
-      placeholder
-        .includes(
-          "6"
-        )
+        .includes("pin") ||
+      placeholder.includes("6")
     ) {
-      pinInput =
-        input;
-
+      pinInput = input;
       break;
     }
   }
@@ -262,9 +297,7 @@ async function login(page) {
       visibleInputs.last();
   }
 
-  await pinInput.fill(
-    PIN
-  );
+  await pinInput.fill(PIN);
 
   console.log(
     "送出登入..."
@@ -276,7 +309,6 @@ async function login(page) {
       {
         name:
           "登入",
-
         exact:
           true,
       }
@@ -309,9 +341,7 @@ async function clickPlayerAvatar(
 
   const targetText =
     page
-      .locator(
-        "text.name"
-      )
+      .locator("text.name")
       .filter({
         hasText:
           playerName,
@@ -321,13 +351,11 @@ async function clickPlayerAvatar(
   await targetText.waitFor({
     state:
       "attached",
-
     timeout:
       15000,
   });
 
-  let point =
-    null;
+  let point = null;
 
   for (
     let attempt = 1;
@@ -336,34 +364,24 @@ async function clickPlayerAvatar(
   ) {
     point =
       await targetText.evaluate(
-        (
-          textEl
-        ) => {
+        (textEl) => {
           const group =
-            textEl.closest(
-              "g"
-            );
+            textEl.closest("g");
 
           if (!group) {
             return null;
           }
 
-          const candidates =
-            [
-              group.querySelector(
-                "image"
-              ),
-
-              group.querySelector(
-                "circle"
-              ),
-
-              textEl,
-
-              group,
-            ].filter(
-              Boolean
-            );
+          const candidates = [
+            group.querySelector(
+              "image"
+            ),
+            group.querySelector(
+              "circle"
+            ),
+            textEl,
+            group,
+          ].filter(Boolean);
 
           for (
             const el
@@ -410,10 +428,6 @@ async function clickPlayerAvatar(
     if (point) {
       break;
     }
-
-    console.log(
-      `第 ${attempt} 次尚未取得 ${playerName} 有效座標...`
-    );
 
     await page.waitForTimeout(
       500
@@ -480,65 +494,60 @@ async function waitForRecentPanel(
     attempt++
   ) {
     const found =
-      await page.evaluate(
-        () => {
-          const all =
-            [
-              ...document.querySelectorAll(
-                "body *"
-              ),
-            ];
+      await page.evaluate(() => {
+        const all = [
+          ...document.querySelectorAll(
+            "body *"
+          ),
+        ];
 
-          for (
-            const el of all
-          ) {
-            const rect =
-              el.getBoundingClientRect();
+        for (
+          const el of all
+        ) {
+          const rect =
+            el.getBoundingClientRect();
 
-            const style =
-              getComputedStyle(
-                el
-              );
+          const style =
+            getComputedStyle(el);
 
-            const visible =
-              rect.width > 0 &&
-              rect.height > 0 &&
-              style.display !==
-                "none" &&
-              style.visibility !==
-                "hidden" &&
-              Number(
-                style.opacity || 1
-              ) !== 0;
+          const visible =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !==
+              "none" &&
+            style.visibility !==
+              "hidden" &&
+            Number(
+              style.opacity || 1
+            ) !== 0;
 
-            if (!visible) {
-              continue;
-            }
-
-            const text =
-              (
-                el.innerText ||
-                el.textContent ||
-                ""
-              )
-                .replace(
-                  /\s+/g,
-                  " "
-                )
-                .trim();
-
-            if (
-              text.includes(
-                "最近紀錄"
-              )
-            ) {
-              return true;
-            }
+          if (!visible) {
+            continue;
           }
 
-          return false;
+          const text =
+            (
+              el.innerText ||
+              el.textContent ||
+              ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim();
+
+          if (
+            text.includes(
+              "最近紀錄"
+            )
+          ) {
+            return true;
+          }
         }
-      );
+
+        return false;
+      });
 
     if (found) {
       console.log(
@@ -547,10 +556,6 @@ async function waitForRecentPanel(
 
       return;
     }
-
-    console.log(
-      `第 ${attempt} 次尚未看到最近紀錄，繼續等待...`
-    );
 
     await page.waitForTimeout(
       500
@@ -578,198 +583,51 @@ async function readRecentRecords(
     `讀取 ${USER_NAME} 右側最近紀錄...`
   );
 
-  /*
-   * 點自己
-   */
   await clickPlayerAvatar(
     page,
     USER_NAME
   );
 
-  /*
-   * 真正等待最近紀錄 panel
-   */
   await waitForRecentPanel(
     page
   );
 
-  /*
-   * panel 出現後再留一點時間，
-   * 讓裡面的內容完成 render
-   */
   await page.waitForTimeout(
     500
   );
 
   const result =
-    await page.evaluate(
-      () => {
-        function visible(
-          el
-        ) {
-          const rect =
-            el.getBoundingClientRect();
+    await page.evaluate(() => {
+      function visible(el) {
+        const rect =
+          el.getBoundingClientRect();
 
-          const style =
-            getComputedStyle(
-              el
-            );
+        const style =
+          getComputedStyle(el);
 
-          return (
-            rect.width > 0 &&
-            rect.height > 0 &&
-            style.display !==
-              "none" &&
-            style.visibility !==
-              "hidden" &&
-            Number(
-              style.opacity || 1
-            ) !== 0
-          );
-        }
-
-        const all =
-          [
-            ...document.querySelectorAll(
-              "body *"
-            ),
-          ];
-
-        /*
-         * 找「最近紀錄」區塊
-         */
-        const recentTitleCandidates =
-          all.filter(
-            (el) => {
-              if (!visible(el)) {
-                return false;
-              }
-
-              const text =
-                (
-                  el.innerText ||
-                  el.textContent ||
-                  ""
-                )
-                  .replace(
-                    /\s+/g,
-                    " "
-                  )
-                  .trim();
-
-              return text.includes(
-                "最近紀錄"
-              );
-            }
-          );
-
-        if (
-          recentTitleCandidates.length ===
-          0
-        ) {
-          return {
-            status:
-              "NO_RECORD_PANEL",
-
-            latest:
-              null,
-
-            records:
-              [],
-
-            debug:
-              "找不到最近紀錄區塊",
-          };
-        }
-
-        /*
-         * 有最近紀錄區，
-         * 但是否真的有「丟了」
-         */
-        const recentContainers =
-          recentTitleCandidates.filter(
-            (el) => {
-              const text =
-                (
-                  el.innerText ||
-                  el.textContent ||
-                  ""
-                )
-                  .replace(
-                    /\s+/g,
-                    " "
-                  )
-                  .trim();
-
-              return text.includes(
-                "丟了"
-              );
-            }
-          );
-
-        /*
-         * 最近紀錄區存在，
-         * 但沒有任何被丟紀錄。
-         */
-        if (
-          recentContainers.length ===
-          0
-        ) {
-          return {
-            status:
-              "NO_RECORDS",
-
-            latest:
-              null,
-
-            records:
-              [],
-
-            debug:
-              "最近紀錄區存在，但目前沒有「丟了」紀錄",
-          };
-        }
-
-        /*
-         * 面積最小優先
-         */
-        recentContainers.sort(
-          (a, b) => {
-            const ra =
-              a.getBoundingClientRect();
-
-            const rb =
-              b.getBoundingClientRect();
-
-            return (
-              ra.width *
-                ra.height -
-              rb.width *
-                rb.height
-            );
-          }
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !==
+            "none" &&
+          style.visibility !==
+            "hidden" &&
+          Number(
+            style.opacity || 1
+          ) !== 0
         );
+      }
 
-        const container =
-          recentContainers[0];
+      const all = [
+        ...document.querySelectorAll(
+          "body *"
+        ),
+      ];
 
-        const descendants =
-          [
-            container,
-
-            ...container.querySelectorAll(
-              "*"
-            ),
-          ];
-
-        const candidates =
-          [];
-
-        for (
-          const el of descendants
-        ) {
+      const recentTitleCandidates =
+        all.filter((el) => {
           if (!visible(el)) {
-            continue;
+            return false;
           }
 
           const text =
@@ -784,269 +642,298 @@ async function readRecentRecords(
               )
               .trim();
 
-          if (!text) {
-            continue;
-          }
-
-          if (
-            !text.includes(
-              "丟了"
-            )
-          ) {
-            continue;
-          }
-
-          const rect =
-            el.getBoundingClientRect();
-
-          candidates.push({
-            text,
-
-            y:
-              rect.top,
-
-            x:
-              rect.left,
-
-            width:
-              rect.width,
-
-            height:
-              rect.height,
-
-            area:
-              rect.width *
-              rect.height,
-
-            tag:
-              el.tagName,
-          });
-        }
-
-        /*
-         * 越上面越新
-         */
-        candidates.sort(
-          (a, b) => {
-            if (
-              Math.abs(
-                a.y - b.y
-              ) > 1
-            ) {
-              return (
-                a.y - b.y
-              );
-            }
-
-            return (
-              a.area -
-              b.area
-            );
-          }
-        );
-
-        const unique =
-          [];
-
-        const seen =
-          new Set();
-
-        for (
-          const item of candidates
-        ) {
-          if (
-            seen.has(
-              item.text
-            )
-          ) {
-            continue;
-          }
-
-          seen.add(
-            item.text
+          return text.includes(
+            "最近紀錄"
           );
+        });
 
-          unique.push(
-            item
-          );
-        }
-
-        const records =
-          [];
-
-        const recordKeys =
-          new Set();
-
-        for (
-          const item of unique
-        ) {
-          const throwIndex =
-            item.text.indexOf(
-              "丟了"
-            );
-
-          if (
-            throwIndex <= 0
-          ) {
-            continue;
-          }
-
-          let sender =
-            item.text
-              .slice(
-                0,
-                throwIndex
-              )
-              .trim();
-
-          let rest =
-            item.text
-              .slice(
-                throwIndex +
-                  "丟了".length
-              )
-              .trim();
-
-          if (
-            !sender ||
-            !rest
-          ) {
-            continue;
-          }
-
-          /*
-           * 移除 sender 前面的 emoji
-           */
-          sender =
-            sender
-              .replace(
-                /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/u,
-                ""
-              )
-              .trim();
-
-          /*
-           * 移除尾端時間
-           */
-          let thrownItem =
-            rest
-              .replace(
-                /\s+\d+\s*(?:秒|分鐘|小時|天)前$/u,
-                ""
-              )
-              .replace(
-                /\s*剛剛$/u,
-                ""
-              )
-              .trim();
-
-          /*
-           * 排除包含多筆紀錄的大父容器
-           */
-          if (
-            thrownItem.includes(
-              "丟了"
-            )
-          ) {
-            continue;
-          }
-
-          if (
-            sender.includes(
-              "最近紀錄"
-            )
-          ) {
-            continue;
-          }
-
-          if (
-            !sender ||
-            !thrownItem
-          ) {
-            continue;
-          }
-
-          /*
-           * DOM 父子節點去重
-           */
-          const recordKey =
-            `${sender}|${thrownItem}`;
-
-          if (
-            recordKeys.has(
-              recordKey
-            )
-          ) {
-            continue;
-          }
-
-          recordKeys.add(
-            recordKey
-          );
-
-          records.push({
-            sender,
-
-            item:
-              thrownItem,
-
-            record:
-              item.text,
-
-            y:
-              item.y,
-          });
-        }
-
-        /*
-         * 有「丟了」但解析不到，
-         * 視為格式異常。
-         */
-        if (
-          records.length ===
-          0
-        ) {
-          return {
-            status:
-              "PARSE_ERROR",
-
-            latest:
-              null,
-
-            records:
-              [],
-
-            debug:
-              container.innerText,
-          };
-        }
-
-        /*
-         * 越上面越新
-         */
-        records.sort(
-          (a, b) =>
-            a.y - b.y
-        );
-
+      if (
+        recentTitleCandidates
+          .length === 0
+      ) {
         return {
           status:
-            "OK",
-
+            "NO_RECORD_PANEL",
           latest:
-            records[0],
+            null,
+          records:
+            [],
+          debug:
+            "找不到最近紀錄區塊",
+        };
+      }
 
-          records,
+      const recentContainers =
+        recentTitleCandidates.filter(
+          (el) => {
+            const text =
+              (
+                el.innerText ||
+                el.textContent ||
+                ""
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
 
+            return text.includes(
+              "丟了"
+            );
+          }
+        );
+
+      if (
+        recentContainers
+          .length === 0
+      ) {
+        return {
+          status:
+            "NO_RECORDS",
+          latest:
+            null,
+          records:
+            [],
+          debug:
+            "最近紀錄存在，但目前沒有丟東西紀錄",
+        };
+      }
+
+      recentContainers.sort(
+        (a, b) => {
+          const ra =
+            a.getBoundingClientRect();
+
+          const rb =
+            b.getBoundingClientRect();
+
+          return (
+            ra.width *
+              ra.height -
+            rb.width *
+              rb.height
+          );
+        }
+      );
+
+      const container =
+        recentContainers[0];
+
+      const descendants = [
+        container,
+        ...container.querySelectorAll(
+          "*"
+        ),
+      ];
+
+      const candidates = [];
+
+      for (
+        const el of descendants
+      ) {
+        if (!visible(el)) {
+          continue;
+        }
+
+        const text =
+          (
+            el.innerText ||
+            el.textContent ||
+            ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        if (
+          !text ||
+          !text.includes("丟了")
+        ) {
+          continue;
+        }
+
+        const rect =
+          el.getBoundingClientRect();
+
+        candidates.push({
+          text,
+          y:
+            rect.top,
+          area:
+            rect.width *
+            rect.height,
+        });
+      }
+
+      candidates.sort(
+        (a, b) => {
+          if (
+            Math.abs(
+              a.y - b.y
+            ) > 1
+          ) {
+            return (
+              a.y - b.y
+            );
+          }
+
+          return (
+            a.area -
+            b.area
+          );
+        }
+      );
+
+      const unique = [];
+      const seen =
+        new Set();
+
+      for (
+        const item of candidates
+      ) {
+        if (
+          seen.has(item.text)
+        ) {
+          continue;
+        }
+
+        seen.add(item.text);
+        unique.push(item);
+      }
+
+      const records = [];
+      const recordKeys =
+        new Set();
+
+      for (
+        const item of unique
+      ) {
+        const throwIndex =
+          item.text.indexOf(
+            "丟了"
+          );
+
+        if (
+          throwIndex <= 0
+        ) {
+          continue;
+        }
+
+        let sender =
+          item.text
+            .slice(
+              0,
+              throwIndex
+            )
+            .trim();
+
+        let rest =
+          item.text
+            .slice(
+              throwIndex +
+              "丟了".length
+            )
+            .trim();
+
+        sender =
+          sender
+            .replace(
+              /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\s]+/u,
+              ""
+            )
+            .trim();
+
+        let thrownItem =
+          rest
+            .replace(
+              /\s+\d+\s*(?:秒|分鐘|小時|天)前$/u,
+              ""
+            )
+            .replace(
+              /\s*剛剛$/u,
+              ""
+            )
+            .trim();
+
+        if (
+          thrownItem.includes(
+            "丟了"
+          )
+        ) {
+          continue;
+        }
+
+        if (
+          sender.includes(
+            "最近紀錄"
+          )
+        ) {
+          continue;
+        }
+
+        if (
+          !sender ||
+          !thrownItem
+        ) {
+          continue;
+        }
+
+        const key =
+          `${sender}|${thrownItem}`;
+
+        if (
+          recordKeys.has(key)
+        ) {
+          continue;
+        }
+
+        recordKeys.add(key);
+
+        records.push({
+          sender,
+          item:
+            thrownItem,
+          record:
+            item.text,
+          y:
+            item.y,
+        });
+      }
+
+      if (
+        records.length === 0
+      ) {
+        return {
+          status:
+            "PARSE_ERROR",
+          latest:
+            null,
+          records:
+            [],
           debug:
             container.innerText,
         };
       }
-    );
 
-  /*
-   * 最近紀錄 panel 消失
-   */
+      records.sort(
+        (a, b) =>
+          a.y - b.y
+      );
+
+      return {
+        status:
+          "OK",
+        latest:
+          records[0],
+        records,
+        debug:
+          container.innerText,
+      };
+    });
+
   if (
     result.status ===
     "NO_RECORD_PANEL"
@@ -1057,15 +944,10 @@ async function readRecentRecords(
     );
 
     throw new Error(
-      "最近紀錄面板已出現過，但解析時找不到，可能 UI 又重新 render"
+      "找不到最近紀錄區塊"
     );
   }
 
-  /*
-   * 沒人丟
-   *
-   * 正常結束
-   */
   if (
     result.status ===
     "NO_RECORDS"
@@ -1076,7 +958,7 @@ async function readRecentRecords(
     );
 
     console.log(
-      "ℹ️ 目前沒有任何人丟東西給你"
+      "ℹ️ 目前沒有人丟東西給你"
     );
 
     console.log(
@@ -1090,24 +972,12 @@ async function readRecentRecords(
     return null;
   }
 
-  /*
-   * 有紀錄但解析失敗
-   */
   if (
     result.status ===
     "PARSE_ERROR"
   ) {
-    console.log("");
-    console.log(
-      "===== 原始最近紀錄區塊 ====="
-    );
-
     console.log(
       result.debug
-    );
-
-    console.log(
-      "=============================="
     );
 
     await safeScreenshot(
@@ -1116,7 +986,7 @@ async function readRecentRecords(
     );
 
     throw new Error(
-      "最近紀錄存在，但無法解析，可能網站紀錄格式已變更"
+      "最近紀錄存在，但無法解析"
     );
   }
 
@@ -1157,8 +1027,6 @@ async function readRecentRecords(
     "========================================"
   );
 
-  console.log("");
-
   console.log(
     "🔥 最新一筆"
   );
@@ -1175,8 +1043,6 @@ async function readRecentRecords(
     `原始紀錄：${result.latest.record}`
   );
 
-  console.log("");
-
   return result.latest;
 }
 
@@ -1187,109 +1053,69 @@ async function readRecentRecords(
 async function getThrowControls(
   page
 ) {
-  return await page.evaluate(
-    () => {
-      const forbidden =
-        new Set([
-          "SCRIPT",
-          "STYLE",
-          "PRE",
-          "CODE",
-        ]);
+  return await page.evaluate(() => {
+    const all = [
+      ...document.querySelectorAll(
+        "body *"
+      ),
+    ];
 
-      const all =
-        [
-          ...document.querySelectorAll(
-            "body *"
-          ),
-        ];
+    const matches = [];
 
-      const matches =
-        [];
+    for (
+      const el of all
+    ) {
+      const text =
+        (
+          el.textContent ||
+          ""
+        ).trim();
 
-      for (
-        const el of all
+      if (
+        text !== "丟東西"
       ) {
-        if (
-          forbidden.has(
-            el.tagName
-          )
-        ) {
-          continue;
-        }
-
-        const text =
-          (
-            el.textContent ||
-            ""
-          ).trim();
-
-        if (
-          text !==
-          "丟東西"
-        ) {
-          continue;
-        }
-
-        const rect =
-          el.getBoundingClientRect();
-
-        const style =
-          getComputedStyle(
-            el
-          );
-
-        if (
-          rect.width <= 0 ||
-          rect.height <= 0 ||
-          style.display ===
-            "none" ||
-          style.visibility ===
-            "hidden" ||
-          Number(
-            style.opacity || 1
-          ) === 0
-        ) {
-          continue;
-        }
-
-        matches.push({
-          tag:
-            el.tagName,
-
-          id:
-            el.id || "",
-
-          className:
-            typeof el.className ===
-            "string"
-              ? el.className
-              : "",
-
-          role:
-            el.getAttribute(
-              "role"
-            ) || "",
-
-          x:
-            rect.left +
-            rect.width / 2,
-
-          y:
-            rect.top +
-            rect.height / 2,
-
-          width:
-            rect.width,
-
-          height:
-            rect.height,
-        });
+        continue;
       }
 
-      return matches;
+      const rect =
+        el.getBoundingClientRect();
+
+      const style =
+        getComputedStyle(el);
+
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        style.display ===
+          "none" ||
+        style.visibility ===
+          "hidden" ||
+        Number(
+          style.opacity || 1
+        ) === 0
+      ) {
+        continue;
+      }
+
+      matches.push({
+        x:
+          rect.left +
+          rect.width / 2,
+
+        y:
+          rect.top +
+          rect.height / 2,
+
+        width:
+          rect.width,
+
+        height:
+          rect.height,
+      });
     }
-  );
+
+    return matches;
+  });
 }
 
 /* =========================================================
@@ -1327,12 +1153,6 @@ async function openThrowPanel(
       const target =
         controls[0];
 
-      console.log(
-        `點擊「丟東西」：` +
-        `x=${target.x.toFixed(1)}, ` +
-        `y=${target.y.toFixed(1)}`
-      );
-
       await page.mouse.move(
         target.x,
         target.y
@@ -1361,10 +1181,6 @@ async function openThrowPanel(
       return;
     }
 
-    console.log(
-      `第 ${attempt} 次尚未找到「丟東西」，繼續等待...`
-    );
-
     await page.waitForTimeout(
       300
     );
@@ -1387,18 +1203,14 @@ async function openThrowPanel(
 async function findAvailableItems(
   page
 ) {
-  return await page.evaluate(
-    () => {
-      function visible(
-        el
-      ) {
+  const rawItems =
+    await page.evaluate(() => {
+      function visible(el) {
         const rect =
           el.getBoundingClientRect();
 
         const style =
-          getComputedStyle(
-            el
-          );
+          getComputedStyle(el);
 
         return (
           rect.width > 5 &&
@@ -1413,38 +1225,22 @@ async function findAvailableItems(
         );
       }
 
-      const forbidden =
-        new Set([
-          "SCRIPT",
-          "STYLE",
-          "PRE",
-          "CODE",
-        ]);
+      const all = [
+        ...document.querySelectorAll(
+          [
+            "button",
+            '[role="button"]',
+            "[data-item]",
+            "[data-name]",
+          ].join(",")
+        ),
+      ];
 
-      const emojiRegex =
-        /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u;
-
-      const all =
-        [
-          ...document.querySelectorAll(
-            "body *"
-          ),
-        ];
-
-      const candidates =
-        [];
+      const result = [];
 
       for (
         const el of all
       ) {
-        if (
-          forbidden.has(
-            el.tagName
-          )
-        ) {
-          continue;
-        }
-
         if (!visible(el)) {
           continue;
         }
@@ -1452,135 +1248,46 @@ async function findAvailableItems(
         const rect =
           el.getBoundingClientRect();
 
-        if (
-          rect.width > 350 ||
-          rect.height > 250
-        ) {
-          continue;
-        }
-
         const text =
           (
             el.innerText ||
             el.textContent ||
             ""
-          ).trim();
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
 
-        const title =
-          el.getAttribute(
-            "title"
-          ) || "";
-
-        const aria =
-          el.getAttribute(
-            "aria-label"
-          ) || "";
-
-        const alt =
-          el.getAttribute(
-            "alt"
-          ) || "";
-
-        const dataItem =
+        const names = [
           el.getAttribute(
             "data-item"
-          ) || "";
-
-        const dataName =
+          ),
           el.getAttribute(
             "data-name"
-          ) || "";
-
-        const dataId =
+          ),
           el.getAttribute(
-            "data-id"
-          ) || "";
-
-        const role =
+            "title"
+          ),
           el.getAttribute(
-            "role"
-          ) || "";
-
-        const name =
-          dataItem ||
-          dataName ||
-          title ||
-          aria ||
-          alt ||
-          text;
-
-        if (!name) {
-          continue;
-        }
-
-        const blocked =
-          new Set([
-            "丟東西",
-            "關閉",
-            "取消",
-            "登入",
-            "確定",
-            "返回",
-            "最近紀錄",
-          ]);
-
-        if (
-          blocked.has(
-            name
-          ) ||
-          blocked.has(
-            text
-          )
-        ) {
-          continue;
-        }
-
-        const explicit =
-          Boolean(
-            dataItem ||
-            dataName
-          );
-
-        const metadata =
-          Boolean(
-            title ||
-            aria ||
-            alt
-          );
-
-        const emoji =
-          emojiRegex.test(
-            text
-          );
-
-        const buttonLike =
-          el.tagName ===
-            "BUTTON" ||
-          role ===
-            "button";
-
-        if (
-          !explicit &&
-          !metadata &&
-          !emoji &&
-          !buttonLike
-        ) {
-          continue;
-        }
-
-        candidates.push({
-          name,
+            "aria-label"
+          ),
           text,
-          title,
-          aria,
-          alt,
-          dataItem,
-          dataName,
-          dataId,
-          explicit,
+        ]
+          .filter(Boolean)
+          .map((x) =>
+            String(x).trim()
+          );
 
-          tag:
-            el.tagName,
+        if (
+          names.length === 0
+        ) {
+          continue;
+        }
+
+        result.push({
+          names,
 
           x:
             rect.left +
@@ -1596,10 +1303,6 @@ async function findAvailableItems(
           height:
             rect.height,
 
-          area:
-            rect.width *
-            rect.height,
-
           html:
             el.outerHTML.slice(
               0,
@@ -1608,63 +1311,76 @@ async function findAvailableItems(
         });
       }
 
-      /*
-       * 同座標去重
-       */
-      const unique =
-        [];
+      return result;
+    });
 
-      for (
-        const item
-        of candidates
-      ) {
-        const duplicate =
-          unique.some(
-            (existing) =>
-              Math.abs(
-                existing.x -
-                  item.x
-              ) < 3 &&
-              Math.abs(
-                existing.y -
-                  item.y
-              ) < 3
-          );
+  const validItems = [];
 
-        if (duplicate) {
-          continue;
-        }
+  for (
+    const candidate
+    of rawItems
+  ) {
+    let matchedName = null;
 
-        unique.push(
-          item
+    for (
+      const candidateName
+      of candidate.names
+    ) {
+      matchedName =
+        getValidItemName(
+          candidateName
         );
+
+      if (matchedName) {
+        break;
       }
+    }
 
-      unique.sort(
-        (a, b) => {
-          if (
-            a.explicit !==
-            b.explicit
-          ) {
-            return a.explicit
-              ? -1
-              : 1;
-          }
+    if (!matchedName) {
+      continue;
+    }
 
-          return (
-            a.area -
-            b.area
-          );
-        }
+    validItems.push({
+      ...candidate,
+
+      name:
+        matchedName,
+    });
+  }
+
+  const unique = [];
+
+  for (
+    const item
+    of validItems
+  ) {
+    const duplicate =
+      unique.some(
+        (existing) =>
+          existing.name ===
+            item.name &&
+          Math.abs(
+            existing.x -
+              item.x
+          ) < 5 &&
+          Math.abs(
+            existing.y -
+              item.y
+          ) < 5
       );
 
-      return unique;
+    if (duplicate) {
+      continue;
     }
-  );
+
+    unique.push(item);
+  }
+
+  return unique;
 }
 
 /* =========================================================
-   WAIT FOR THROW ITEMS
+   WAIT FOR ITEMS
 ========================================================= */
 
 async function waitForThrowItems(
@@ -1686,10 +1402,6 @@ async function waitForThrowItems(
       return items;
     }
 
-    console.log(
-      `第 ${attempt} 次尚未找到道具，等待面板...`
-    );
-
     await page.waitForTimeout(
       500
     );
@@ -1701,7 +1413,61 @@ async function waitForThrowItems(
   );
 
   throw new Error(
-    "丟東西面板已開，但找不到道具"
+    "找不到任何合法道具"
+  );
+}
+
+/* =========================================================
+   FIND SPECIFIC ITEM
+========================================================= */
+
+/*
+ * 第一次只隨機選名稱。
+ *
+ * 後面 100 次都只重新定位
+ * 同一個名稱的道具。
+ */
+async function waitForSpecificItem(
+  page,
+  selectedName
+) {
+  for (
+    let attempt = 1;
+    attempt <= 20;
+    attempt++
+  ) {
+    const items =
+      await findAvailableItems(
+        page
+      );
+
+    const item =
+      items.find(
+        (candidate) =>
+          candidate.name ===
+          selectedName
+      );
+
+    if (item) {
+      return item;
+    }
+
+    console.log(
+      `第 ${attempt} 次尚未重新找到「${selectedName}」，等待 UI...`
+    );
+
+    await page.waitForTimeout(
+      300
+    );
+  }
+
+  await safeScreenshot(
+    page,
+    "selected-item-missing.png"
+  );
+
+  throw new Error(
+    `找不到已選定的道具：${selectedName}`
   );
 }
 
@@ -1772,26 +1538,91 @@ async function executeRetaliation(
     "========================================"
   );
 
-  /*
-   * 點攻擊者
-   */
   await clickPlayerAvatar(
     page,
     target
   );
 
-  /*
-   * 開丟東西
-   */
   await openThrowPanel(
     page
   );
 
-  let successCount =
-    0;
+  /*
+   * =====================================================
+   * 只在這裡隨機一次
+   * =====================================================
+   */
 
-  const throwLog =
-    [];
+  const availableItems =
+    await waitForThrowItems(
+      page
+    );
+
+  console.log("");
+  console.log(
+    "===== 可丟道具 ====="
+  );
+
+  availableItems.forEach(
+    (item, index) => {
+      console.log(
+        `${index + 1}. ${item.name}`
+      );
+    }
+  );
+
+  console.log(
+    "===================="
+  );
+
+  const selected =
+    chooseRandomItem(
+      availableItems
+    );
+
+  if (!selected) {
+    throw new Error(
+      "無法隨機選擇道具"
+    );
+  }
+
+  const selectedName =
+    selected.name;
+
+  if (
+    !isValidItemName(
+      selectedName
+    )
+  ) {
+    throw new Error(
+      `安全阻擋：非法道具「${selectedName}」`
+    );
+  }
+
+  console.log("");
+  console.log(
+    "🎲 本次隨機結果"
+  );
+
+  console.log(
+    `✅ 選定道具：${selectedName}`
+  );
+
+  console.log(
+    `✅ 接下來 ${THROW_COUNT} 次全部只丟「${selectedName}」`
+  );
+
+  console.log("");
+
+  let successCount = 0;
+
+  /*
+   * =====================================================
+   * 後面不再 random
+   *
+   * 全部只找 selectedName
+   * =====================================================
+   */
 
   for (
     let i = 0;
@@ -1800,45 +1631,37 @@ async function executeRetaliation(
   ) {
     try {
       /*
-       * 每一次重新找道具，
-       * 避免 UI rerender
+       * 每次重新找同一個道具的位置，
+       * 防止 DOM rerender / 座標改變。
        */
-      const items =
-        await waitForThrowItems(
-          page
+      const item =
+        await waitForSpecificItem(
+          page,
+          selectedName
         );
 
+      /*
+       * 再做一次安全確認
+       */
       if (
-        items.length === 0
+        item.name !==
+          selectedName ||
+        !isValidItemName(
+          item.name
+        )
       ) {
         throw new Error(
-          "目前沒有可丟道具"
+          `安全阻擋：道具定位異常「${item.name}」`
         );
       }
 
-      const selected =
-        chooseRandomItem(
-          items
-        );
-
-      if (!selected) {
-        throw new Error(
-          "隨機選擇道具失敗"
-        );
-      }
-
-      console.log("");
       console.log(
-        `🎲 第 ${i + 1}/${THROW_COUNT} 次`
-      );
-
-      console.log(
-        `隨機選到：${selected.name}`
+        `🎯 第 ${i + 1}/${THROW_COUNT} 次：${selectedName}`
       );
 
       await page.mouse.move(
-        selected.x,
-        selected.y
+        item.x,
+        item.y
       );
 
       await page.waitForTimeout(
@@ -1854,10 +1677,6 @@ async function executeRetaliation(
       await page.mouse.up();
 
       successCount++;
-
-      throwLog.push(
-        selected.name
-      );
 
       console.log(
         `✅ 已執行 ${successCount}/${THROW_COUNT}`
@@ -1885,20 +1704,6 @@ async function executeRetaliation(
     }
   }
 
-  const stats =
-    {};
-
-  for (
-    const itemName
-    of throwLog
-  ) {
-    stats[itemName] =
-      (
-        stats[itemName] ||
-        0
-      ) + 1;
-  }
-
   console.log("");
   console.log(
     "========================================"
@@ -1917,27 +1722,12 @@ async function executeRetaliation(
   );
 
   console.log(
+    `使用道具：${selectedName}`
+  );
+
+  console.log(
     `成功次數：${successCount}/${THROW_COUNT}`
   );
-
-  console.log("");
-  console.log(
-    "本次道具統計："
-  );
-
-  for (
-    const [
-      itemName,
-      count,
-    ]
-    of Object.entries(
-      stats
-    )
-  ) {
-    console.log(
-      `- ${itemName}: ${count} 次`
-    );
-  }
 
   console.log(
     "========================================"
@@ -1945,8 +1735,9 @@ async function executeRetaliation(
 
   return {
     target,
+    item:
+      selectedName,
     successCount,
-    throwLog,
   };
 }
 
@@ -1986,7 +1777,6 @@ async function executeRetaliation(
       viewport: {
         width:
           1440,
-
         height:
           1000,
       },
@@ -1997,14 +1787,12 @@ async function executeRetaliation(
 
   try {
     /*
-     * 1. 登入
+     * 登入
      */
-    await login(
-      page
-    );
+    await login(page);
 
     /*
-     * 2. 找最新攻擊者
+     * 找最新丟你的人
      */
     const latest =
       await readRecentRecords(
@@ -2012,9 +1800,7 @@ async function executeRetaliation(
       );
 
     /*
-     * 沒人丟你
-     *
-     * 正常結束
+     * 沒人丟
      */
     if (!latest) {
       console.log("");
@@ -2029,9 +1815,6 @@ async function executeRetaliation(
       return;
     }
 
-    /*
-     * 安全檢查
-     */
     if (
       !latest.sender
     ) {
@@ -2050,7 +1833,7 @@ async function executeRetaliation(
     }
 
     /*
-     * 3. 真正反擊
+     * 執行反擊
      */
     const result =
       await executeRetaliation(
@@ -2065,6 +1848,10 @@ async function executeRetaliation(
 
     console.log(
       `✅ 對象：${result.target}`
+    );
+
+    console.log(
+      `✅ 道具：${result.item}`
     );
 
     console.log(
@@ -2085,8 +1872,7 @@ async function executeRetaliation(
       "error.png"
     );
 
-    process.exitCode =
-      1;
+    process.exitCode = 1;
   } finally {
     await browser.close();
   }
