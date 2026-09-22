@@ -144,22 +144,32 @@ async function openTarget(page) {
 
   console.log(`找到目標：${TARGET_NAME}`);
 
-  await target.evaluate((el) => {
-    // 關係圖通常把 click listener 掛在外層 <g>
-    const node = el.closest("g") || el;
+  try {
+    await target.evaluate((el) => {
+      const node = el.closest("g") || el;
 
-    node.dispatchEvent(
-      new MouseEvent("click", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-    );
-  });
+      node.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        })
+      );
+    });
 
-  console.log(`已點擊：${TARGET_NAME}`);
+    console.log("DOM click 成功");
+  } catch (error) {
+    console.log("DOM click 失敗，改用 force click");
+
+    await target.click({
+      force: true,
+      timeout: 5000,
+    });
+  }
 
   await page.waitForTimeout(1000);
+
+  console.log(`已開啟目標：${TARGET_NAME}`);
 }
 
 async function openThrowPanel(page) {
