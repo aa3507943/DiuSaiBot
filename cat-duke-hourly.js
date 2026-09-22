@@ -4,7 +4,7 @@ const URL =
   "https://mabinogi-cat-duke-guild-a9aeb3.gitlab.io/";
 
 const USER_NAME = "菜阿嘎吸粉絲血";
-const TARGET_NAME = "兜裡有奶糖";
+const TARGET_NAME = "山大王";
 const ITEM_NAME = "貓黃金";
 
 const PIN = process.env.CAT_DUKE_PIN;
