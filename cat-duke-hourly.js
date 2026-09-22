@@ -15,7 +15,7 @@ const MAX_PER_RUN = Number(
   process.env.THROW_COUNT || "97"
 );
 
-const CLICK_GAP_MS = 120;
+const CLICK_GAP_MS = 1000;
 
 const sleep = (ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
