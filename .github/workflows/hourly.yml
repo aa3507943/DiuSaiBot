@@ -6,9 +6,18 @@ on:
 
   workflow_dispatch:
 
+concurrency:
+  group: cat-duke-hourly
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
+
+    timeout-minutes: 8
+
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
 
     steps:
       - name: Checkout repository
@@ -18,33 +27,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: npm ci
 
       - name: Run automation
         env:
           CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
 
-          # 要丟的人
           TARGET_NAME: 山大王
 
-          # 每個整點要丟幾次
           THROW_COUNT: 100
 
-          # 每次點擊間隔，1000 = 1 秒
+          # 每次間隔 1 秒
           CLICK_GAP_MS: 1000
 
         run: npm start
 
-      - name: Upload debug screenshots
-        if: always()
+      - name: Upload debug screenshots on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-screenshots
+          name: debug-screenshots-${{ github.run_number }}
           path: |
             error.png
             after-target-click.png
@@ -53,3 +58,4 @@ jobs:
             throw-error.png
             no-throw-control.png
           if-no-files-found: ignore
+          retention-days: 3
