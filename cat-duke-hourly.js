@@ -258,44 +258,34 @@ async function openThrowPanel(page) {
 async function throwItems(page) {
   console.log(`尋找道具：${ITEM_NAME}`);
 
-  let item = page
-    .getByRole("button", {
-      name: ITEM_NAME,
-      exact: true,
+  await page.waitForTimeout(800);
+
+  const item = page
+    .getByText(ITEM_NAME, {
+      exact: false,
     })
     .first();
-
-  if (
-    !(await item.count()) ||
-    !(await item.isVisible().catch(() => false))
-  ) {
-    item = page
-      .getByText(ITEM_NAME, {
-        exact: true,
-      })
-      .first();
-  }
 
   await item.waitFor({
     state: "visible",
     timeout: 10000,
   });
 
-  console.log(`開始連點 ${ITEM_NAME}`);
+  console.log(`找到道具：${ITEM_NAME}`);
+  console.log(`準備丟 ${MAX_PER_RUN} 次`);
 
   let successCount = 0;
 
   for (let i = 0; i < MAX_PER_RUN; i++) {
     try {
       await item.click({
+        force: true,
         timeout: 3000,
       });
 
       successCount++;
 
-      console.log(
-        `已丟 ${successCount}/${MAX_PER_RUN}`
-      );
+      console.log(`已丟 ${successCount}/${MAX_PER_RUN}`);
 
       await sleep(CLICK_GAP_MS);
     } catch (error) {
@@ -307,9 +297,7 @@ async function throwItems(page) {
     }
   }
 
-  console.log(
-    `完成，本次共執行 ${successCount} 次`
-  );
+  console.log(`完成，本次共執行 ${successCount} 次`);
 }
 
 (async () => {
