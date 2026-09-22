@@ -12,7 +12,7 @@ const PIN = process.env.CAT_DUKE_PIN;
 // 測試時 GitHub Actions 可設成 1
 // 正式版改成 100
 const MAX_PER_RUN = Number(
-  process.env.THROW_COUNT || "2"
+  process.env.THROW_COUNT || "97"
 );
 
 const CLICK_GAP_MS = 120;
