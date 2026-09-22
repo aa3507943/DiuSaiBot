@@ -1,32 +1,47 @@
 const { chromium } = require("playwright");
 
+/* =========================================================
+   CONFIG
+========================================================= */
+
 const URL =
   "https://mabinogi-cat-duke-guild-a9aeb3.gitlab.io/";
 
 const USER_NAME = "菜阿嘎吸粉絲血";
-const TARGET_NAME = "山大王";
+
+// 要丟的人
+const TARGET_NAME =
+  process.env.TARGET_NAME || "山大王";
+
+// 要丟的東西
 const ITEM_NAME = "貓黃金";
+const ITEM_EMOJI = "💩";
 
 const PIN = process.env.CAT_DUKE_PIN;
 
-// 測試時 GitHub Actions 可設成 1
-// 正式版改成 100
+// 一次丟幾次
 const MAX_PER_RUN = Number(
-  process.env.THROW_COUNT || "97"
+  process.env.THROW_COUNT || "1"
 );
 
-const CLICK_GAP_MS = 1000;
+// 每次丟東西之間的間隔
+// 預設 1000ms = 1 秒
+const CLICK_GAP_MS = Number(
+  process.env.CLICK_GAP_MS || "1000"
+);
 
 const sleep = (ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+  new Promise((resolve) =>
+    setTimeout(resolve, ms)
+  );
 
 /* =========================================================
-   基本檢查
+   CONFIG CHECK
 ========================================================= */
 
 if (!PIN || !/^\d{6}$/.test(PIN)) {
   console.error(
-    "缺少 CAT_DUKE_PIN，或 PIN 不是 6 位數。"
+    "缺少 CAT_DUKE_PIN，或 PIN 不是 6 位數"
   );
 
   process.exit(1);
@@ -38,14 +53,46 @@ if (
   MAX_PER_RUN > 100
 ) {
   console.error(
-    "THROW_COUNT 必須是 1～100 的整數。"
+    "THROW_COUNT 必須是 1～100 的整數"
+  );
+
+  process.exit(1);
+}
+
+if (
+  !Number.isFinite(CLICK_GAP_MS) ||
+  CLICK_GAP_MS < 100
+) {
+  console.error(
+    "CLICK_GAP_MS 不可小於 100"
   );
 
   process.exit(1);
 }
 
 /* =========================================================
-   登入
+   SCREENSHOT
+========================================================= */
+
+async function safeScreenshot(
+  page,
+  filename
+) {
+  try {
+    await page.screenshot({
+      path: filename,
+      fullPage: true,
+    });
+  } catch (error) {
+    console.warn(
+      `截圖失敗 ${filename}:`,
+      error.message
+    );
+  }
+}
+
+/* =========================================================
+   LOGIN
 ========================================================= */
 
 async function login(page) {
@@ -56,7 +103,7 @@ async function login(page) {
     timeout: 30000,
   });
 
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1200);
 
   console.log("點擊登入...");
 
@@ -76,9 +123,12 @@ async function login(page) {
 
   await page.waitForTimeout(500);
 
-  console.log(`選擇角色：${USER_NAME}`);
+  console.log(
+    `選擇角色：${USER_NAME}`
+  );
 
-  const select = page.locator("select").first();
+  const select =
+    page.locator("select").first();
 
   await select.waitFor({
     state: "visible",
@@ -91,14 +141,17 @@ async function login(page) {
 
   console.log("輸入 PIN...");
 
-  const inputs = page.locator("input");
+  const inputs =
+    page.locator("input");
 
   let pinInput = null;
 
-  const inputCount = await inputs.count();
+  const count =
+    await inputs.count();
 
-  for (let i = 0; i < inputCount; i++) {
-    const input = inputs.nth(i);
+  for (let i = 0; i < count; i++) {
+    const input =
+      inputs.nth(i);
 
     if (
       !(await input
@@ -109,11 +162,13 @@ async function login(page) {
     }
 
     const type =
-      (await input.getAttribute("type")) || "";
+      (await input.getAttribute("type")) ||
+      "";
 
     const placeholder =
-      (await input.getAttribute("placeholder")) ||
-      "";
+      (await input.getAttribute(
+        "placeholder"
+      )) || "";
 
     if (
       type === "password" ||
@@ -131,13 +186,16 @@ async function login(page) {
     const visibleInputs =
       page.locator("input:visible");
 
-    if (!(await visibleInputs.count())) {
+    if (
+      (await visibleInputs.count()) === 0
+    ) {
       throw new Error(
         "找不到 PIN 輸入欄位"
       );
     }
 
-    pinInput = visibleInputs.last();
+    pinInput =
+      visibleInputs.last();
   }
 
   await pinInput.fill(PIN);
@@ -154,24 +212,107 @@ async function login(page) {
 
   await page.waitForTimeout(1500);
 
-  const bodyText =
-    await page.locator("body").innerText();
-
-  if (
-    !bodyText.includes(
-      `歡迎回來，${USER_NAME}`
-    )
-  ) {
-    console.log(
-      "⚠️ 沒找到歡迎訊息，但先繼續執行"
-    );
-  }
-
   console.log("登入流程完成");
 }
 
 /* =========================================================
-   點擊「兜裡有奶糖」
+   找可見的「丟東西」
+========================================================= */
+
+async function getThrowControls(page) {
+  return await page.evaluate(() => {
+    const forbidden =
+      new Set([
+        "SCRIPT",
+        "STYLE",
+        "PRE",
+        "CODE",
+      ]);
+
+    const all = [
+      ...document.querySelectorAll(
+        "body *"
+      ),
+    ];
+
+    const matches = [];
+
+    for (const el of all) {
+      if (
+        forbidden.has(el.tagName)
+      ) {
+        continue;
+      }
+
+      const text =
+        (el.textContent || "").trim();
+
+      if (text !== "丟東西") {
+        continue;
+      }
+
+      const rect =
+        el.getBoundingClientRect();
+
+      const style =
+        getComputedStyle(el);
+
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        style.display === "none" ||
+        style.visibility ===
+          "hidden" ||
+        Number(style.opacity || 1) ===
+          0
+      ) {
+        continue;
+      }
+
+      matches.push({
+        tag: el.tagName,
+
+        id:
+          el.id || "",
+
+        className:
+          typeof el.className ===
+          "string"
+            ? el.className
+            : "",
+
+        role:
+          el.getAttribute("role") ||
+          "",
+
+        x:
+          rect.left +
+          rect.width / 2,
+
+        y:
+          rect.top +
+          rect.height / 2,
+
+        width:
+          rect.width,
+
+        height:
+          rect.height,
+
+        html:
+          el.outerHTML.slice(
+            0,
+            1000
+          ),
+      });
+    }
+
+    return matches;
+  });
+}
+
+/* =========================================================
+   OPEN TARGET
 ========================================================= */
 
 async function openTarget(page) {
@@ -198,72 +339,79 @@ async function openTarget(page) {
   let point = null;
 
   /*
-   * GitHub runner 有時 SVG 還在 layout。
+   * SVG 可能還在 layout
    *
-   * 最多重試 30 次：
-   * 30 × 500ms = 15 秒
+   * 30 × 500ms = 最多等 15 秒
    */
   for (
     let attempt = 1;
     attempt <= 30;
     attempt++
   ) {
-    point = await targetText.evaluate(
-      (textEl) => {
-        const group =
-          textEl.closest("g");
+    point =
+      await targetText.evaluate(
+        (textEl) => {
+          const group =
+            textEl.closest("g");
 
-        if (!group) {
+          if (!group) {
+            return null;
+          }
+
+          const candidates = [
+            group.querySelector(
+              "image"
+            ),
+
+            group.querySelector(
+              "circle"
+            ),
+
+            textEl,
+
+            group,
+          ].filter(Boolean);
+
+          for (
+            const el of candidates
+          ) {
+            const rect =
+              el.getBoundingClientRect();
+
+            if (
+              rect.width > 2 &&
+              rect.height > 2 &&
+              Number.isFinite(
+                rect.left
+              ) &&
+              Number.isFinite(
+                rect.top
+              )
+            ) {
+              return {
+                tag:
+                  el.tagName,
+
+                x:
+                  rect.left +
+                  rect.width / 2,
+
+                y:
+                  rect.top +
+                  rect.height / 2,
+
+                width:
+                  rect.width,
+
+                height:
+                  rect.height,
+              };
+            }
+          }
+
           return null;
         }
-
-        /*
-         * 優先順序：
-         *
-         * image
-         * circle
-         * text
-         * group
-         */
-        const candidates = [
-          group.querySelector("image"),
-          group.querySelector("circle"),
-          textEl,
-          group,
-        ].filter(Boolean);
-
-        for (const el of candidates) {
-          const rect =
-            el.getBoundingClientRect();
-
-          if (
-            rect &&
-            rect.width > 2 &&
-            rect.height > 2 &&
-            Number.isFinite(rect.left) &&
-            Number.isFinite(rect.top)
-          ) {
-            return {
-              x:
-                rect.left +
-                rect.width / 2,
-
-              y:
-                rect.top +
-                rect.height / 2,
-
-              width: rect.width,
-
-              height: rect.height,
-
-              tag: el.tagName,
-            };
-          }
-        }
-
-        return null;
-      }
-    );
+      );
 
     if (point) {
       console.log(
@@ -277,19 +425,19 @@ async function openTarget(page) {
       `第 ${attempt} 次尚未取得有效座標，等待 SVG layout...`
     );
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(
+      500
+    );
   }
 
   if (!point) {
-    await page.screenshot({
-      path:
-        "target-coordinate-error.png",
-
-      fullPage: true,
-    });
+    await safeScreenshot(
+      page,
+      "target-coordinate-error.png"
+    );
 
     throw new Error(
-      `${TARGET_NAME} 已存在，但等待後仍沒有有效點擊座標`
+      `${TARGET_NAME} 找到了，但沒有有效頭像座標`
     );
   }
 
@@ -297,15 +445,18 @@ async function openTarget(page) {
     `目標元素=${point.tag}, ` +
       `x=${point.x.toFixed(1)}, ` +
       `y=${point.y.toFixed(1)}, ` +
-      `w=${point.width.toFixed(1)}, ` +
-      `h=${point.height.toFixed(1)}`
+      `w=${point.width.toFixed(
+        1
+      )}, ` +
+      `h=${point.height.toFixed(
+        1
+      )}`
   );
 
   /*
-   * 不用 locator.click()
+   * 真實 mouse interaction
    *
-   * 因為 SVG node 一直移動，
-   * Playwright 會認為 unstable。
+   * 不用 locator.click()
    */
   await page.mouse.move(
     point.x,
@@ -325,294 +476,438 @@ async function openTarget(page) {
   );
 
   /*
-   * 等右側面板出現
+   * 不能再用
+   *
+   * bodyText.includes("丟東西")
+   *
+   * 因為 script 裡本身也有此字串。
    */
-  let panelOpened = false;
+  let controls = [];
 
-  for (let i = 0; i < 15; i++) {
-    await page.waitForTimeout(300);
+  for (
+    let attempt = 1;
+    attempt <= 15;
+    attempt++
+  ) {
+    await page.waitForTimeout(
+      300
+    );
 
-    const bodyText =
-      await page
-        .locator("body")
-        .innerText();
+    controls =
+      await getThrowControls(
+        page
+      );
 
     if (
-      bodyText.includes("丟東西")
+      controls.length > 0
     ) {
-      panelOpened = true;
-      break;
+      console.log(
+        "✅ 目標操作面板已真正開啟"
+      );
+
+      return;
     }
   }
 
-  if (!panelOpened) {
-    await page.screenshot({
-      path:
-        "after-target-click.png",
+  await safeScreenshot(
+    page,
+    "after-target-click.png"
+  );
 
-      fullPage: true,
-    });
-
-    throw new Error(
-      "已點擊目標，但右側操作面板沒有正常開啟"
-    );
-  }
-
-  console.log(
-    "✅ 目標面板已成功開啟"
+  throw new Error(
+    `點擊 ${TARGET_NAME} 後沒有出現真正的「丟東西」控制項`
   );
 }
 
 /* =========================================================
-   打開「丟東西」
+   OPEN THROW PANEL
 ========================================================= */
 
 async function openThrowPanel(page) {
   console.log(
-    "尋找「丟東西」..."
+    '尋找真正的「丟東西」控制項...'
   );
 
-  const throwControl = page
-    .getByText("丟東西", {
-      exact: false,
-    })
-    .first();
+  await page.waitForTimeout(500);
 
-  await throwControl.waitFor({
-    state: "visible",
-    timeout: 8000,
-  });
+  let controls =
+    await getThrowControls(page);
+
+  if (
+    controls.length === 0
+  ) {
+    throw new Error(
+      "找不到真正可見的「丟東西」"
+    );
+  }
 
   console.log(
-    "找到「丟東西」"
+    `找到 ${controls.length} 個「丟東西」候選元素`
   );
+
+  for (
+    const control of controls
+  ) {
+    console.log(
+      `候選：tag=${control.tag}, ` +
+        `id=${control.id}, ` +
+        `class=${control.className}, ` +
+        `role=${control.role}`
+    );
+  }
 
   /*
-   * force 是因為 UI 可能有動畫。
+   * 最小的可見元素通常是實際 tab/button，
+   * 而不是包住整區的父元素。
    */
-  await throwControl.click({
-    force: true,
-  });
+  controls.sort(
+    (a, b) =>
+      a.width * a.height -
+      b.width * b.height
+  );
+
+  const target =
+    controls[0];
 
   console.log(
-    "已點擊「丟東西」"
+    `點擊「丟東西」：` +
+      `x=${target.x.toFixed(
+        1
+      )}, ` +
+      `y=${target.y.toFixed(
+        1
+      )}`
+  );
+
+  await page.mouse.move(
+    target.x,
+    target.y
+  );
+
+  await page.waitForTimeout(100);
+
+  await page.mouse.down();
+
+  await page.waitForTimeout(80);
+
+  await page.mouse.up();
+
+  console.log(
+    '已實際點擊「丟東西」'
   );
 
   /*
    * 等道具 UI 展開
    */
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(
+    1200
+  );
 }
 
 /* =========================================================
-   尋找「貓黃金」
+   FIND CAT GOLD
 ========================================================= */
 
 async function findCatGold(page) {
+  const matches =
+    await page.evaluate(
+      ({
+        itemName,
+        emoji,
+      }) => {
+        const forbidden =
+          new Set([
+            "SCRIPT",
+            "STYLE",
+            "PRE",
+            "CODE",
+          ]);
+
+        const all = [
+          ...document.querySelectorAll(
+            "body *"
+          ),
+        ];
+
+        const result = [];
+
+        for (const el of all) {
+          if (
+            forbidden.has(
+              el.tagName
+            )
+          ) {
+            continue;
+          }
+
+          const rect =
+            el.getBoundingClientRect();
+
+          const style =
+            getComputedStyle(el);
+
+          if (
+            rect.width <= 0 ||
+            rect.height <= 0 ||
+            style.display ===
+              "none" ||
+            style.visibility ===
+              "hidden" ||
+            Number(
+              style.opacity || 1
+            ) === 0
+          ) {
+            continue;
+          }
+
+          const text =
+            (
+              el.textContent || ""
+            ).trim();
+
+          const title =
+            el.getAttribute(
+              "title"
+            ) || "";
+
+          const aria =
+            el.getAttribute(
+              "aria-label"
+            ) || "";
+
+          const alt =
+            el.getAttribute(
+              "alt"
+            ) || "";
+
+          const dataItem =
+            el.getAttribute(
+              "data-item"
+            ) || "";
+
+          const dataName =
+            el.getAttribute(
+              "data-name"
+            ) || "";
+
+          const nameFound =
+            title.includes(
+              itemName
+            ) ||
+            aria.includes(
+              itemName
+            ) ||
+            alt.includes(
+              itemName
+            ) ||
+            dataItem.includes(
+              itemName
+            ) ||
+            dataName.includes(
+              itemName
+            );
+
+          /*
+           * 貓黃金目前定義是：
+           *
+           * {id:'貓黃金', e:'💩'}
+           *
+           * 所以 UI 可能只有 💩
+           */
+          const emojiFound =
+            text === emoji ||
+            text ===
+              `${emoji}${itemName}` ||
+            text ===
+              `${emoji} ${itemName}`;
+
+          if (
+            !nameFound &&
+            !emojiFound
+          ) {
+            continue;
+          }
+
+          result.push({
+            tag:
+              el.tagName,
+
+            id:
+              el.id || "",
+
+            className:
+              typeof el.className ===
+              "string"
+                ? el.className
+                : "",
+
+            text,
+
+            title,
+
+            aria,
+
+            alt,
+
+            dataItem,
+
+            dataName,
+
+            named:
+              nameFound,
+
+            x:
+              rect.left +
+              rect.width / 2,
+
+            y:
+              rect.top +
+              rect.height / 2,
+
+            width:
+              rect.width,
+
+            height:
+              rect.height,
+
+            html:
+              el.outerHTML.slice(
+                0,
+                1500
+              ),
+          });
+        }
+
+        return result;
+      },
+
+      {
+        itemName:
+          ITEM_NAME,
+
+        emoji:
+          ITEM_EMOJI,
+      }
+    );
+
+  if (
+    matches.length === 0
+  ) {
+    return null;
+  }
+
+  /*
+   * 排序：
+   *
+   * 1. 有明確「貓黃金」名稱的優先
+   * 2. 元素面積較小優先
+   *
+   * 可避免誤點到包含 💩 的大父容器
+   */
+  matches.sort((a, b) => {
+    if (
+      a.named !== b.named
+    ) {
+      return a.named
+        ? -1
+        : 1;
+    }
+
+    return (
+      a.width *
+        a.height -
+      b.width *
+        b.height
+    );
+  });
+
+  return {
+    selected:
+      matches[0],
+
+    all:
+      matches,
+  };
+}
+
+/* =========================================================
+   WAIT FOR CAT GOLD
+========================================================= */
+
+async function waitForCatGold(page) {
   console.log(
     `尋找道具：${ITEM_NAME}`
   );
 
-  /*
-   * 可能的 DOM 形式都試一次。
-   */
-  const candidates = [
-    /*
-     * Button accessible name
-     */
-    page
-      .getByRole("button", {
-        name: /貓黃金/,
-      })
-      .first(),
-
-    /*
-     * title
-     */
-    page
-      .locator(
-        '[title*="貓黃金"]'
-      )
-      .first(),
-
-    /*
-     * aria-label
-     */
-    page
-      .locator(
-        '[aria-label*="貓黃金"]'
-      )
-      .first(),
-
-    /*
-     * alt
-     */
-    page
-      .locator(
-        'img[alt*="貓黃金"]'
-      )
-      .first(),
-
-    /*
-     * data-name
-     */
-    page
-      .locator(
-        '[data-name*="貓黃金"]'
-      )
-      .first(),
-
-    /*
-     * data-item
-     */
-    page
-      .locator(
-        '[data-item*="貓黃金"]'
-      )
-      .first(),
-
-    /*
-     * 部分文字
-     *
-     * 可匹配：
-     * 💩貓黃金
-     * 💩 貓黃金
-     */
-    page
-      .getByText("貓黃金", {
-        exact: false,
-      })
-      .first(),
-  ];
-
   for (
     let attempt = 1;
-    attempt <= 10;
+    attempt <= 20;
     attempt++
   ) {
-    for (
-      let i = 0;
-      i < candidates.length;
-      i++
+    const result =
+      await findCatGold(page);
+
+    if (
+      result &&
+      result.selected
     ) {
-      const locator =
-        candidates[i];
-
-      try {
-        if (
-          (await locator.count()) >
-            0 &&
-          (await locator
-            .isVisible()
-            .catch(() => false))
-        ) {
-          console.log(
-            `✅ 找到貓黃金，selector #${
-              i + 1
-            }`
-          );
-
-          return locator;
-        }
-      } catch {
-        // 繼續找下一個
-      }
-    }
-
-    console.log(
-      `第 ${attempt} 次尚未找到貓黃金，等待道具面板...`
-    );
-
-    await page.waitForTimeout(500);
-  }
-
-  /*
-   * 找不到就輸出完整 debug
-   */
-  console.log(
-    "❌ 找不到貓黃金，開始輸出診斷資訊"
-  );
-
-  const buttons =
-    await page
-      .locator("button")
-      .allTextContents();
-
-  console.log("BUTTONS:");
-  console.log(buttons);
-
-  const bodyText =
-    await page
-      .locator("body")
-      .innerText();
-
-  console.log("BODY TEXT:");
-  console.log(bodyText);
-
-  const html =
-    await page
-      .locator("body")
-      .innerHTML();
-
-  const keywords = [
-    "貓黃金",
-    "黃金",
-    "💩",
-    "throw",
-    "item",
-  ];
-
-  console.log(
-    "搜尋可能的道具 HTML:"
-  );
-
-  for (
-    const keyword of keywords
-  ) {
-    const index =
-      html.indexOf(keyword);
-
-    console.log(
-      `KEYWORD [${keyword}] index=${index}`
-    );
-
-    if (index >= 0) {
       console.log(
-        html.slice(
-          Math.max(
-            0,
-            index - 1000
-          ),
-
-          Math.min(
-            html.length,
-            index + 2500
-          )
-        )
+        `✅ 找到 ${ITEM_NAME}`
       );
+
+      const item =
+        result.selected;
+
+      console.log(
+        `tag=${item.tag}, ` +
+          `text="${item.text}", ` +
+          `title="${item.title}", ` +
+          `aria="${item.aria}"`
+      );
+
+      console.log(
+        item.html
+      );
+
+      return item;
     }
+
+    console.log(
+      `第 ${attempt} 次尚未找到 ${ITEM_NAME}，等待道具面板...`
+    );
+
+    await page.waitForTimeout(
+      500
+    );
   }
 
-  await page.screenshot({
-    path: "throw-panel.png",
-    fullPage: true,
-  });
+  await safeScreenshot(
+    page,
+    "throw-panel.png"
+  );
 
   throw new Error(
-    "找不到貓黃金，道具面板 DOM 已輸出"
+    `丟東西面板已開，但找不到 ${ITEM_NAME}`
   );
 }
 
 /* =========================================================
-   丟東西
+   THROW ITEMS
 ========================================================= */
 
 async function throwItems(page) {
-  const item =
-    await findCatGold(page);
+  /*
+   * 第一次先確認道具真的存在
+   */
+  let item =
+    await waitForCatGold(page);
 
   console.log(
     `準備丟 ${MAX_PER_RUN} 次 ${ITEM_NAME}`
+  );
+
+  console.log(
+    `點擊間隔 ${CLICK_GAP_MS} ms`
   );
 
   let successCount = 0;
@@ -624,12 +919,53 @@ async function throwItems(page) {
   ) {
     try {
       /*
-       * 先嘗試 Playwright click
+       * 每次點擊前重新取得座標。
+       *
+       * 因為有些 UI 點完後 DOM
+       * 可能重新 render。
        */
-      await item.click({
-        force: true,
-        timeout: 3000,
-      });
+      if (i > 0) {
+        const result =
+          await findCatGold(
+            page
+          );
+
+        if (
+          !result ||
+          !result.selected
+        ) {
+          console.log(
+            `第 ${
+              i + 1
+            } 次前重新尋找 ${ITEM_NAME}`
+          );
+
+          item =
+            await waitForCatGold(
+              page
+            );
+        } else {
+          item =
+            result.selected;
+        }
+      }
+
+      await page.mouse.move(
+        item.x,
+        item.y
+      );
+
+      await page.waitForTimeout(
+        80
+      );
+
+      await page.mouse.down();
+
+      await page.waitForTimeout(
+        60
+      );
+
+      await page.mouse.up();
 
       successCount++;
 
@@ -637,9 +973,17 @@ async function throwItems(page) {
         `已丟 ${successCount}/${MAX_PER_RUN}`
       );
 
-      await sleep(
-        CLICK_GAP_MS
-      );
+      /*
+       * 每次丟東西之間等待
+       */
+      if (
+        successCount <
+        MAX_PER_RUN
+      ) {
+        await sleep(
+          CLICK_GAP_MS
+        );
+      }
     } catch (error) {
       console.error(
         `第 ${
@@ -647,33 +991,18 @@ async function throwItems(page) {
         } 次點擊失敗：${error.message}`
       );
 
-      /*
-       * 截圖保存現場
-       */
-      await page
-        .screenshot({
-          path:
-            "throw-error.png",
+      await safeScreenshot(
+        page,
+        "throw-error.png"
+      );
 
-          fullPage: true,
-        })
-        .catch(() => {});
-
-      break;
+      throw error;
     }
   }
 
   console.log(
-    `完成，本次共執行 ${successCount} 次`
+    `✅ 完成，本次共執行 ${successCount} 次`
   );
-
-  if (
-    successCount === 0
-  ) {
-    throw new Error(
-      "貓黃金一次都沒有成功點擊"
-    );
-  }
 }
 
 /* =========================================================
@@ -681,6 +1010,22 @@ async function throwItems(page) {
 ========================================================= */
 
 (async () => {
+  console.log(
+    `本次預計丟 ${MAX_PER_RUN} 次`
+  );
+
+  console.log(
+    `目標：${TARGET_NAME}`
+  );
+
+  console.log(
+    `道具：${ITEM_NAME}`
+  );
+
+  console.log(
+    `間隔：${CLICK_GAP_MS} ms`
+  );
+
   const browser =
     await chromium.launch({
       headless: true,
@@ -698,10 +1043,6 @@ async function throwItems(page) {
     await context.newPage();
 
   try {
-    console.log(
-      `本次預計丟 ${MAX_PER_RUN} 次`
-    );
-
     await login(page);
 
     await openTarget(page);
@@ -710,7 +1051,9 @@ async function throwItems(page) {
 
     await throwItems(page);
 
-    console.log("✅ 任務完成");
+    console.log(
+      "✅ 任務完成"
+    );
   } catch (error) {
     console.error(
       "❌ 執行失敗："
@@ -718,12 +1061,10 @@ async function throwItems(page) {
 
     console.error(error);
 
-    await page
-      .screenshot({
-        path: "error.png",
-        fullPage: true,
-      })
-      .catch(() => {});
+    await safeScreenshot(
+      page,
+      "error.png"
+    );
 
     process.exitCode = 1;
   } finally {

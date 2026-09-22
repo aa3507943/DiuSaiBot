@@ -25,6 +25,9 @@ jobs:
       - name: Run automation
         env:
           CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
+          TARGET_NAME: 山大王
+          THROW_COUNT: 71
+          CLICK_GAP_MS: 1000
         run: npm start
 
       - name: Upload debug screenshots
@@ -35,4 +38,8 @@ jobs:
           path: |
             error.png
             after-target-click.png
+            target-coordinate-error.png
+            throw-panel.png
+            throw-error.png
+            no-throw-control.png
           if-no-files-found: ignore
