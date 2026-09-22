@@ -2,7 +2,7 @@ name: Cat Duke Hourly
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "20 * * * *"
 
   workflow_dispatch:
 
