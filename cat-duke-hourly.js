@@ -133,19 +133,33 @@ async function openTarget(page) {
   console.log(`尋找目標：${TARGET_NAME}`);
 
   const target = page
-    .getByText(TARGET_NAME, {
-      exact: true,
-    })
+    .locator("text.name")
+    .filter({ hasText: TARGET_NAME })
     .first();
 
   await target.waitFor({
-    state: "visible",
+    state: "attached",
     timeout: 15000,
   });
 
-  await target.click();
+  console.log(`找到目標：${TARGET_NAME}`);
 
-  await page.waitForTimeout(700);
+  await target.evaluate((el) => {
+    // 關係圖通常把 click listener 掛在外層 <g>
+    const node = el.closest("g") || el;
+
+    node.dispatchEvent(
+      new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      })
+    );
+  });
+
+  console.log(`已點擊：${TARGET_NAME}`);
+
+  await page.waitForTimeout(1000);
 }
 
 async function openThrowPanel(page) {
