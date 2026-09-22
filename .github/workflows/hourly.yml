@@ -1,0 +1,37 @@
+name: Cat Duke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run automation
+        env:
+          CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
+        run: npm start
+
+      - name: Upload error screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: error.png
+          if-no-files-found: ignore
