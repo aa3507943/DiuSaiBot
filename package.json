@@ -6,6 +6,6 @@
     "start": "node cat-duke-hourly.js"
   },
   "dependencies": {
-    "playwright": "^1.55.0"
+    "playwright": "1.63.0"
   }
 }
