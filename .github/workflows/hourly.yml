@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 8
 
     container:
-      image: mcr.microsoft.com/playwright:v1.55.0-noble
+        image: mcr.microsoft.com/playwright:v1.63.0-noble
 
     steps:
       - name: Checkout repository
