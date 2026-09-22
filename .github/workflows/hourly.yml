@@ -47,6 +47,11 @@ jobs:
           path: |
             error.png
             after-target-click.png
+            player-coordinate-error.png
+            recent-records-error.png
+            no-throw-control.png
+            no-items.png
+            retaliation-error.png
             target-coordinate-error.png
             throw-panel.png
             throw-error.png
