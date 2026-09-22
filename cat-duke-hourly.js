@@ -204,9 +204,7 @@ async function login(page) {
           () => false
         );
 
-    if (
-      !isVisible
-    ) {
+    if (!isVisible) {
       continue;
     }
 
@@ -246,9 +244,7 @@ async function login(page) {
     }
   }
 
-  if (
-    !pinInput
-  ) {
+  if (!pinInput) {
     const visibleInputs =
       page.locator(
         "input:visible"
@@ -348,23 +344,19 @@ async function clickPlayerAvatar(
               "g"
             );
 
-          if (
-            !group
-          ) {
+          if (!group) {
             return null;
           }
 
           const candidates =
             [
-              group
-                .querySelector(
-                  "image"
-                ),
+              group.querySelector(
+                "image"
+              ),
 
-              group
-                .querySelector(
-                  "circle"
-                ),
+              group.querySelector(
+                "circle"
+              ),
 
               textEl,
 
@@ -378,22 +370,17 @@ async function clickPlayerAvatar(
             of candidates
           ) {
             const rect =
-              el
-                .getBoundingClientRect();
+              el.getBoundingClientRect();
 
             if (
-              rect.width >
-                2 &&
-              rect.height >
-                2 &&
-              Number
-                .isFinite(
-                  rect.left
-                ) &&
-              Number
-                .isFinite(
-                  rect.top
-                )
+              rect.width > 2 &&
+              rect.height > 2 &&
+              Number.isFinite(
+                rect.left
+              ) &&
+              Number.isFinite(
+                rect.top
+              )
             ) {
               return {
                 tag:
@@ -401,13 +388,11 @@ async function clickPlayerAvatar(
 
                 x:
                   rect.left +
-                  rect.width /
-                    2,
+                  rect.width / 2,
 
                 y:
                   rect.top +
-                  rect.height /
-                    2,
+                  rect.height / 2,
 
                 width:
                   rect.width,
@@ -422,9 +407,7 @@ async function clickPlayerAvatar(
         }
       );
 
-    if (
-      point
-    ) {
+    if (point) {
       break;
     }
 
@@ -433,9 +416,7 @@ async function clickPlayerAvatar(
     );
   }
 
-  if (
-    !point
-  ) {
+  if (!point) {
     await safeScreenshot(
       page,
       "player-coordinate-error.png"
@@ -448,12 +429,8 @@ async function clickPlayerAvatar(
 
   console.log(
     `點擊 ${playerName}：` +
-    `x=${point.x.toFixed(
-      1
-    )}, ` +
-    `y=${point.y.toFixed(
-      1
-    )}`
+    `x=${point.x.toFixed(1)}, ` +
+    `y=${point.y.toFixed(1)}`
   );
 
   await page.mouse.move(
@@ -509,8 +486,7 @@ async function readRecentRecords(
           el
         ) {
           const rect =
-            el
-              .getBoundingClientRect();
+            el.getBoundingClientRect();
 
           const style =
             getComputedStyle(
@@ -518,39 +494,34 @@ async function readRecentRecords(
             );
 
           return (
-            rect.width >
-              0 &&
-            rect.height >
-              0 &&
+            rect.width > 0 &&
+            rect.height > 0 &&
             style.display !==
               "none" &&
             style.visibility !==
               "hidden" &&
             Number(
-              style.opacity ||
-                1
+              style.opacity || 1
             ) !== 0
           );
         }
 
         const all =
           [
-            ...document
-              .querySelectorAll(
-                "body *"
-              ),
+            ...document.querySelectorAll(
+              "body *"
+            ),
           ];
 
-        const recentContainers =
+        /*
+         * 先確認「最近紀錄」區存在。
+         *
+         * 這一步跟「今天沒有人丟」分開判斷。
+         */
+        const recentTitleCandidates =
           all.filter(
-            (
-              el
-            ) => {
-              if (
-                !visible(
-                  el
-                )
-              ) {
+            (el) => {
+              if (!visible(el)) {
                 return false;
               }
 
@@ -566,25 +537,24 @@ async function readRecentRecords(
                   )
                   .trim();
 
-              return (
-                text
-                  .includes(
-                    "最近紀錄"
-                  ) &&
-                text
-                  .includes(
-                    "丟了"
-                  )
+              return text.includes(
+                "最近紀錄"
               );
             }
           );
 
+        /*
+         * 完全沒有最近紀錄區：
+         * 視為 UI / DOM 異常。
+         */
         if (
-          recentContainers
-            .length ===
+          recentTitleCandidates.length ===
           0
         ) {
           return {
+            status:
+              "NO_RECORD_PANEL",
+
             latest:
               null,
 
@@ -596,18 +566,68 @@ async function readRecentRecords(
           };
         }
 
+        /*
+         * 找同時包含：
+         *
+         * 最近紀錄
+         * 丟了
+         *
+         * 的容器。
+         *
+         * 如果沒有，代表紀錄區存在，
+         * 但目前沒有被丟紀錄。
+         */
+        const recentContainers =
+          recentTitleCandidates.filter(
+            (el) => {
+              const text =
+                (
+                  el.innerText ||
+                  el.textContent ||
+                  ""
+                )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              return text.includes(
+                "丟了"
+              );
+            }
+          );
+
+        if (
+          recentContainers.length ===
+          0
+        ) {
+          return {
+            status:
+              "NO_RECORDS",
+
+            latest:
+              null,
+
+            records:
+              [],
+
+            debug:
+              "最近紀錄區存在，但目前沒有「丟了」紀錄",
+          };
+        }
+
+        /*
+         * 面積最小的容器優先，
+         * 避免抓到整個右側 panel。
+         */
         recentContainers.sort(
-          (
-            a,
-            b
-          ) => {
+          (a, b) => {
             const ra =
-              a
-                .getBoundingClientRect();
+              a.getBoundingClientRect();
 
             const rb =
-              b
-                .getBoundingClientRect();
+              b.getBoundingClientRect();
 
             return (
               ra.width *
@@ -619,9 +639,7 @@ async function readRecentRecords(
         );
 
         const container =
-          recentContainers[
-            0
-          ];
+          recentContainers[0];
 
         const descendants =
           [
@@ -640,11 +658,7 @@ async function readRecentRecords(
           const el
           of descendants
         ) {
-          if (
-            !visible(
-              el
-            )
-          ) {
+          if (!visible(el)) {
             continue;
           }
 
@@ -660,69 +674,57 @@ async function readRecentRecords(
               )
               .trim();
 
-          if (
-            !text
-          ) {
+          if (!text) {
             continue;
           }
 
           if (
-            !text
-              .includes(
-                "丟了"
-              )
+            !text.includes(
+              "丟了"
+            )
           ) {
             continue;
           }
 
           const rect =
-            el
-              .getBoundingClientRect();
+            el.getBoundingClientRect();
 
-          candidates.push(
-            {
-              text,
+          candidates.push({
+            text,
 
-              y:
-                rect.top,
+            y:
+              rect.top,
 
-              x:
-                rect.left,
+            x:
+              rect.left,
 
-              width:
-                rect.width,
+            width:
+              rect.width,
 
-              height:
-                rect.height,
+            height:
+              rect.height,
 
-              area:
-                rect.width *
-                rect.height,
+            area:
+              rect.width *
+              rect.height,
 
-              tag:
-                el.tagName,
-            }
-          );
+            tag:
+              el.tagName,
+          });
         }
 
         /*
          * 越上面越新
          */
         candidates.sort(
-          (
-            a,
-            b
-          ) => {
+          (a, b) => {
             if (
               Math.abs(
-                a.y -
-                  b.y
-              ) >
-              1
+                a.y - b.y
+              ) > 1
             ) {
               return (
-                a.y -
-                b.y
+                a.y - b.y
               );
             }
 
@@ -733,6 +735,9 @@ async function readRecentRecords(
           }
         );
 
+        /*
+         * 先去除完全相同的 DOM 文字
+         */
         const unique =
           [];
 
@@ -763,6 +768,10 @@ async function readRecentRecords(
         const records =
           [];
 
+        /*
+         * 用 sender + item 再去除
+         * 父子 DOM 重複。
+         */
         const recordKeys =
           new Set();
 
@@ -771,14 +780,12 @@ async function readRecentRecords(
           of unique
         ) {
           const throwIndex =
-            item.text
-              .indexOf(
-                "丟了"
-              );
+            item.text.indexOf(
+              "丟了"
+            );
 
           if (
-            throwIndex <=
-            0
+            throwIndex <= 0
           ) {
             continue;
           }
@@ -807,7 +814,7 @@ async function readRecentRecords(
           }
 
           /*
-           * 移除名字前面的 emoji
+           * 去掉名字前面的 emoji
            *
            * 🩴 山大王
            * →
@@ -822,7 +829,13 @@ async function readRecentRecords(
               .trim();
 
           /*
-           * 移除時間
+           * 去除尾端時間：
+           *
+           * 6 小時前
+           * 10 分鐘前
+           * 30 秒前
+           * 1 天前
+           * 剛剛
            */
           let thrownItem =
             rest
@@ -837,22 +850,20 @@ async function readRecentRecords(
               .trim();
 
           /*
-           * 父容器會包含多個「丟了」
+           * 父容器裡可能包含多筆「丟了」
            */
           if (
-            thrownItem
-              .includes(
-                "丟了"
-              )
+            thrownItem.includes(
+              "丟了"
+            )
           ) {
             continue;
           }
 
           if (
-            sender
-              .includes(
-                "最近紀錄"
-              )
+            sender.includes(
+              "最近紀錄"
+            )
           ) {
             continue;
           }
@@ -879,50 +890,147 @@ async function readRecentRecords(
             recordKey
           );
 
-          records.push(
-            {
-              sender,
+          records.push({
+            sender,
 
-              item:
-                thrownItem,
+            item:
+              thrownItem,
 
-              record:
-                item.text,
+            record:
+              item.text,
 
-              y:
-                item.y,
-            }
-          );
+            y:
+              item.y,
+          });
         }
 
+        /*
+         * 如果有「丟了」文字，
+         * 但完全解析不到，
+         * 這不是「沒人丟」，
+         * 而是格式改變。
+         */
+        if (
+          records.length ===
+          0
+        ) {
+          return {
+            status:
+              "PARSE_ERROR",
+
+            latest:
+              null,
+
+            records:
+              [],
+
+            debug:
+              container.innerText,
+          };
+        }
+
+        /*
+         * 越上面越新
+         */
         records.sort(
-          (
-            a,
-            b
-          ) =>
-            a.y -
-            b.y
+          (a, b) =>
+            a.y - b.y
         );
 
         const latest =
-          records.length >
-          0
-            ? records[
-                0
-              ]
-            : null;
+          records[0];
 
         return {
+          status:
+            "OK",
+
           latest,
 
           records,
 
           debug:
-            container
-              .innerText,
+            container.innerText,
         };
       }
     );
+
+  /*
+   * 情況 1：
+   * 最近紀錄區根本不存在
+   */
+  if (
+    result.status ===
+    "NO_RECORD_PANEL"
+  ) {
+    await safeScreenshot(
+      page,
+      "recent-records-error.png"
+    );
+
+    throw new Error(
+      "找不到最近紀錄區塊，可能是頁面尚未載入或網站 DOM 已變更"
+    );
+  }
+
+  /*
+   * 情況 2：
+   * 最近紀錄區存在，
+   * 但今天沒有人丟你。
+   */
+  if (
+    result.status ===
+    "NO_RECORDS"
+  ) {
+    console.log("");
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "ℹ️ 目前沒有任何人丟東西給你"
+    );
+
+    console.log(
+      "ℹ️ 本次不執行反擊"
+    );
+
+    console.log(
+      "========================================"
+    );
+
+    return null;
+  }
+
+  /*
+   * 情況 3：
+   * 有紀錄，但格式解析失敗
+   */
+  if (
+    result.status ===
+    "PARSE_ERROR"
+  ) {
+    console.log("");
+    console.log(
+      "===== 原始最近紀錄區塊 ====="
+    );
+
+    console.log(
+      result.debug
+    );
+
+    console.log(
+      "=============================="
+    );
+
+    await safeScreenshot(
+      page,
+      "recent-records-error.png"
+    );
+
+    throw new Error(
+      "最近紀錄存在，但無法解析，可能是網站紀錄格式已變更"
+    );
+  }
 
   console.log("");
   console.log(
@@ -941,45 +1049,8 @@ async function readRecentRecords(
     "========================================"
   );
 
-  if (
-    result.records
-      .length === 0
-  ) {
-    console.log(
-      "沒有成功解析出單筆紀錄。"
-    );
-
-    console.log(
-      ""
-    );
-
-    console.log(
-      "===== 原始紀錄區塊 ====="
-    );
-
-    console.log(
-      result.debug
-    );
-
-    console.log(
-      "=========================="
-    );
-
-    await safeScreenshot(
-      page,
-      "recent-records-error.png"
-    );
-
-    throw new Error(
-      "無法解析最近紀錄"
-    );
-  }
-
   result.records.forEach(
-    (
-      record,
-      index
-    ) => {
+    (record, index) => {
       console.log(
         `[${index + 1}] ${record.record}`
       );
@@ -1040,10 +1111,9 @@ async function getThrowControls(
 
       const all =
         [
-          ...document
-            .querySelectorAll(
-              "body *"
-            ),
+          ...document.querySelectorAll(
+            "body *"
+          ),
         ];
 
       const matches =
@@ -1075,8 +1145,7 @@ async function getThrowControls(
         }
 
         const rect =
-          el
-            .getBoundingClientRect();
+          el.getBoundingClientRect();
 
         const style =
           getComputedStyle(
@@ -1084,60 +1153,51 @@ async function getThrowControls(
           );
 
         if (
-          rect.width <=
-            0 ||
-          rect.height <=
-            0 ||
+          rect.width <= 0 ||
+          rect.height <= 0 ||
           style.display ===
             "none" ||
           style.visibility ===
             "hidden" ||
           Number(
-            style.opacity ||
-              1
+            style.opacity || 1
           ) === 0
         ) {
           continue;
         }
 
-        matches.push(
-          {
-            tag:
-              el.tagName,
+        matches.push({
+          tag:
+            el.tagName,
 
-            id:
-              el.id ||
-              "",
+          id:
+            el.id || "",
 
-            className:
-              typeof el.className ===
-              "string"
-                ? el.className
-                : "",
+          className:
+            typeof el.className ===
+            "string"
+              ? el.className
+              : "",
 
-            role:
-              el.getAttribute(
-                "role"
-              ) ||
-              "",
+          role:
+            el.getAttribute(
+              "role"
+            ) || "",
 
-            x:
-              rect.left +
-              rect.width /
-                2,
+          x:
+            rect.left +
+            rect.width / 2,
 
-            y:
-              rect.top +
-              rect.height /
-                2,
+          y:
+            rect.top +
+            rect.height / 2,
 
-            width:
-              rect.width,
+          width:
+            rect.width,
 
-            height:
-              rect.height,
-          }
-        );
+          height:
+            rect.height,
+        });
       }
 
       return matches;
@@ -1167,14 +1227,14 @@ async function openThrowPanel(
       );
 
     if (
-      controls.length >
-      0
+      controls.length > 0
     ) {
+      /*
+       * 小元素優先，
+       * 避免點到父容器。
+       */
       controls.sort(
-        (
-          a,
-          b
-        ) =>
+        (a, b) =>
           a.width *
             a.height -
           b.width *
@@ -1182,18 +1242,12 @@ async function openThrowPanel(
       );
 
       const target =
-        controls[
-          0
-        ];
+        controls[0];
 
       console.log(
         `點擊「丟東西」：` +
-        `x=${target.x.toFixed(
-          1
-        )}, ` +
-        `y=${target.y.toFixed(
-          1
-        )}`
+        `x=${target.x.toFixed(1)}, ` +
+        `y=${target.y.toFixed(1)}`
       );
 
       await page.mouse.move(
@@ -1252,8 +1306,7 @@ async function findAvailableItems(
         el
       ) {
         const rect =
-          el
-            .getBoundingClientRect();
+          el.getBoundingClientRect();
 
         const style =
           getComputedStyle(
@@ -1261,17 +1314,14 @@ async function findAvailableItems(
           );
 
         return (
-          rect.width >
-            5 &&
-          rect.height >
-            5 &&
+          rect.width > 5 &&
+          rect.height > 5 &&
           style.display !==
             "none" &&
           style.visibility !==
             "hidden" &&
           Number(
-            style.opacity ||
-              1
+            style.opacity || 1
           ) !== 0
         );
       }
@@ -1289,10 +1339,9 @@ async function findAvailableItems(
 
       const all =
         [
-          ...document
-            .querySelectorAll(
-              "body *"
-            ),
+          ...document.querySelectorAll(
+            "body *"
+          ),
         ];
 
       const candidates =
@@ -1310,23 +1359,19 @@ async function findAvailableItems(
           continue;
         }
 
-        if (
-          !visible(
-            el
-          )
-        ) {
+        if (!visible(el)) {
           continue;
         }
 
         const rect =
-          el
-            .getBoundingClientRect();
+          el.getBoundingClientRect();
 
+        /*
+         * 排除巨大容器
+         */
         if (
-          rect.width >
-            350 ||
-          rect.height >
-            250
+          rect.width > 350 ||
+          rect.height > 250
         ) {
           continue;
         }
@@ -1381,9 +1426,7 @@ async function findAvailableItems(
           alt ||
           text;
 
-        if (
-          !name
-        ) {
+        if (!name) {
           continue;
         }
 
@@ -1442,61 +1485,56 @@ async function findAvailableItems(
           continue;
         }
 
-        candidates.push(
-          {
-            name,
+        candidates.push({
+          name,
 
-            text,
+          text,
 
-            title,
+          title,
 
-            aria,
+          aria,
 
-            alt,
+          alt,
 
-            dataItem,
+          dataItem,
 
-            dataName,
+          dataName,
 
-            dataId,
+          dataId,
 
-            explicit,
+          explicit,
 
-            tag:
-              el.tagName,
+          tag:
+            el.tagName,
 
-            x:
-              rect.left +
-              rect.width /
-                2,
+          x:
+            rect.left +
+            rect.width / 2,
 
-            y:
-              rect.top +
-              rect.height /
-                2,
+          y:
+            rect.top +
+            rect.height / 2,
 
-            width:
-              rect.width,
+          width:
+            rect.width,
 
-            height:
-              rect.height,
+          height:
+            rect.height,
 
-            area:
-              rect.width *
-                rect.height,
+          area:
+            rect.width *
+            rect.height,
 
-            html:
-              el.outerHTML
-                .slice(
-                  0,
-                  1000
-                ),
-          }
-        );
+          html:
+            el.outerHTML.slice(
+              0,
+              1000
+            ),
+        });
       }
 
       /*
-       * 同位置的父子元素去重
+       * 同座標父子 DOM 去重
        */
       const unique =
         [];
@@ -1507,24 +1545,18 @@ async function findAvailableItems(
       ) {
         const duplicate =
           unique.some(
-            (
-              existing
-            ) =>
+            (existing) =>
               Math.abs(
                 existing.x -
                   item.x
-              ) <
-                3 &&
+              ) < 3 &&
               Math.abs(
                 existing.y -
                   item.y
-              ) <
-                3
+              ) < 3
           );
 
-        if (
-          duplicate
-        ) {
+        if (duplicate) {
           continue;
         }
 
@@ -1533,11 +1565,12 @@ async function findAvailableItems(
         );
       }
 
+      /*
+       * data-item / data-name
+       * 優先。
+       */
       unique.sort(
-        (
-          a,
-          b
-        ) => {
+        (a, b) => {
           if (
             a.explicit !==
             b.explicit
@@ -1577,8 +1610,7 @@ async function waitForThrowItems(
       );
 
     if (
-      items.length >
-      0
+      items.length > 0
     ) {
       return items;
     }
@@ -1611,8 +1643,7 @@ function chooseRandomItem(
 ) {
   if (
     !items ||
-    items.length ===
-      0
+    items.length === 0
   ) {
     return null;
   }
@@ -1623,9 +1654,7 @@ function chooseRandomItem(
       items.length
     );
 
-  return items[
-    index
-  ];
+  return items[index];
 }
 
 /* =========================================================
@@ -1673,7 +1702,7 @@ async function executeRetaliation(
   );
 
   /*
-   * 點攻擊者
+   * 點最新攻擊者
    */
   await clickPlayerAvatar(
     page,
@@ -1700,10 +1729,8 @@ async function executeRetaliation(
   ) {
     try {
       /*
-       * 每次都重新找道具
-       *
-       * 因為點完後 DOM
-       * 可能重新 render
+       * 每次重新抓 DOM，
+       * 避免點完後 UI rerender。
        */
       const items =
         await waitForThrowItems(
@@ -1711,25 +1738,19 @@ async function executeRetaliation(
         );
 
       if (
-        items.length ===
-        0
+        items.length === 0
       ) {
         throw new Error(
           "目前沒有可丟道具"
         );
       }
 
-      /*
-       * 每次重新隨機
-       */
       const selected =
         chooseRandomItem(
           items
         );
 
-      if (
-        !selected
-      ) {
+      if (!selected) {
         throw new Error(
           "隨機選擇道具失敗"
         );
@@ -1745,7 +1766,7 @@ async function executeRetaliation(
       );
 
       /*
-       * 真實滑鼠動作
+       * 真實滑鼠點擊
        */
       await page.mouse.move(
         selected.x,
@@ -1782,9 +1803,7 @@ async function executeRetaliation(
           CLICK_GAP_MS
         );
       }
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.error(
         `❌ 第 ${i + 1} 次反擊失敗：${error.message}`
       );
@@ -1799,7 +1818,7 @@ async function executeRetaliation(
   }
 
   /*
-   * 統計
+   * 統計本次道具
    */
   const stats =
     {};
@@ -1926,7 +1945,7 @@ async function executeRetaliation(
     /*
      * 2. 點自己
      *
-     * 3. 找最新丟你的人
+     * 3. 讀最近紀錄
      */
     const latest =
       await readRecentRecords(
@@ -1934,14 +1953,30 @@ async function executeRetaliation(
       );
 
     /*
-     * 安全檢查
+     * 沒有人丟：
+     * 正常結束，不反擊。
+     */
+    if (!latest) {
+      console.log("");
+      console.log(
+        "✅ 沒有反擊目標"
+      );
+
+      console.log(
+        "✅ 本次任務正常結束，沒有執行任何丟東西動作"
+      );
+
+      return;
+    }
+
+    /*
+     * 額外安全檢查
      */
     if (
-      !latest ||
       !latest.sender
     ) {
       throw new Error(
-        "找不到有效反擊目標"
+        "最新紀錄沒有有效玩家名稱"
       );
     }
 
@@ -1975,9 +2010,7 @@ async function executeRetaliation(
     console.log(
       `✅ 次數：${result.successCount}`
     );
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error("");
     console.error(
       "❌ 執行失敗"
