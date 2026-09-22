@@ -27,10 +27,12 @@ jobs:
           CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
         run: npm start
 
-      - name: Upload error screenshot
-        if: failure()
+      - name: Upload debug screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: error-screenshot
-          path: error.png
+          name: debug-screenshots
+          path: |
+            error.png
+            after-target-click.png
           if-no-files-found: ignore

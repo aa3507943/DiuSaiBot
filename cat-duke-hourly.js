@@ -173,15 +173,28 @@ async function openTarget(page) {
 }
 
 async function openThrowPanel(page) {
-  console.log("開啟「丟東西」...");
+  console.log("檢查點擊目標後的頁面內容...");
 
-  const success = await clickVisibleText(page, "丟東西");
+  await page.waitForTimeout(1500);
 
-  if (!success) {
-    throw new Error("找不到「丟東西」");
-  }
+  const buttons = await page.locator("button").allTextContents();
+  console.log("BUTTONS:");
+  console.log(buttons);
 
-  await page.waitForTimeout(500);
+  const visibleText = await page.locator("body").innerText();
+  console.log("BODY TEXT:");
+  console.log(visibleText);
+
+  const html = await page.locator("body").innerHTML();
+  console.log("BODY HTML 前 12000 字:");
+  console.log(html.slice(0, 12000));
+
+  await page.screenshot({
+    path: "after-target-click.png",
+    fullPage: true,
+  });
+
+  throw new Error("DEBUG: 已輸出目標點擊後的頁面資訊");
 }
 
 async function throwItems(page) {
