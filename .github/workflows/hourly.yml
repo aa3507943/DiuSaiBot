@@ -1,6 +1,9 @@
-name: Cat Duke Test
+name: Cat Duke Hourly
 
 on:
+  schedule:
+    - cron: "2 * * * *"
+
   workflow_dispatch:
 
 jobs:
@@ -25,9 +28,16 @@ jobs:
       - name: Run automation
         env:
           CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
+
+          # 要丟的人
           TARGET_NAME: 山大王
-          THROW_COUNT: 71
+
+          # 每個整點要丟幾次
+          THROW_COUNT: 100
+
+          # 每次點擊間隔，1000 = 1 秒
           CLICK_GAP_MS: 1000
+
         run: npm start
 
       - name: Upload debug screenshots
