@@ -7,7 +7,7 @@ const ITEM_NAME = "貓黃金";
 
 const PIN = process.env.CAT_DUKE_PIN;
 
-const MAX_PER_RUN = 1;
+const MAX_PER_RUN = 99;
 const CLICK_GAP_MS = 100;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
