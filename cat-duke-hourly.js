@@ -132,70 +132,116 @@ async function login(page) {
 async function openTarget(page) {
   console.log(`尋找目標：${TARGET_NAME}`);
 
-  const target = page
+  const targetText = page
     .locator("text.name")
     .filter({ hasText: TARGET_NAME })
     .first();
 
-  await target.waitFor({
-    state: "attached",
+  await targetText.waitFor({
+    state: "visible",
     timeout: 15000,
   });
 
-  console.log(`找到目標：${TARGET_NAME}`);
+  console.log(`找到目標文字：${TARGET_NAME}`);
 
-  try {
-    await target.evaluate((el) => {
-      const node = el.closest("g") || el;
+  // 找這個名字所屬的 SVG group
+  const targetGroup = targetText.locator("xpath=ancestor::g[1]");
 
-      node.dispatchEvent(
-        new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-        })
-      );
-    });
+  // 優先點頭像 image / circle，而不是名字文字
+  let clickable = targetGroup.locator("image").first();
 
-    console.log("DOM click 成功");
-  } catch (error) {
-    console.log("DOM click 失敗，改用 force click");
-
-    await target.click({
-      force: true,
-      timeout: 5000,
-    });
+  if (
+    !(await clickable.count()) ||
+    !(await clickable.isVisible().catch(() => false))
+  ) {
+    clickable = targetGroup.locator("circle").first();
   }
 
-  await page.waitForTimeout(1000);
+  if (
+    !(await clickable.count()) ||
+    !(await clickable.isVisible().catch(() => false))
+  ) {
+    clickable = targetGroup;
+  }
 
-  console.log(`已開啟目標：${TARGET_NAME}`);
+  // 不使用 locator.click()
+  // 因為 D3 節點持續移動會被 Playwright 判斷為 unstable
+  const box = await clickable.boundingBox();
+
+  if (!box) {
+    throw new Error(`無法取得 ${TARGET_NAME} 頭像座標`);
+  }
+
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  console.log(
+    `準備點擊 ${TARGET_NAME} 頭像座標：x=${x.toFixed(1)}, y=${y.toFixed(1)}`
+  );
+
+  await page.mouse.click(x, y);
+
+  console.log(`已實際點擊 ${TARGET_NAME} 頭像`);
+
+  await page.waitForTimeout(1200);
+
+  // 驗證右側操作介面是否真的打開
+  const bodyText = await page.locator("body").innerText();
+
+  if (bodyText.includes("丟東西")) {
+    console.log("✅ 目標面板已成功開啟");
+  } else {
+    console.log("⚠️ 點擊後仍未看到「丟東西」");
+
+    await page.screenshot({
+      path: "after-target-click.png",
+      fullPage: true,
+    });
+  }
 }
 
 async function openThrowPanel(page) {
-  console.log("檢查點擊目標後的頁面內容...");
+  console.log("尋找「丟東西」...");
 
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(500);
 
-  const buttons = await page.locator("button").allTextContents();
-  console.log("BUTTONS:");
-  console.log(buttons);
+  const throwControl = page
+    .getByText("丟東西", {
+      exact: false,
+    })
+    .first();
 
-  const visibleText = await page.locator("body").innerText();
-  console.log("BODY TEXT:");
-  console.log(visibleText);
+  try {
+    await throwControl.waitFor({
+      state: "visible",
+      timeout: 5000,
+    });
 
-  const html = await page.locator("body").innerHTML();
-  console.log("BODY HTML 前 12000 字:");
-  console.log(html.slice(0, 12000));
+    console.log("找到「丟東西」");
 
-  await page.screenshot({
-    path: "after-target-click.png",
-    fullPage: true,
-  });
+    await throwControl.click({
+      force: true,
+    });
 
-  throw new Error("DEBUG: 已輸出目標點擊後的頁面資訊");
+    console.log("已點擊「丟東西」");
+
+    await page.waitForTimeout(700);
+  } catch (error) {
+    console.log("找不到「丟東西」，輸出診斷資料...");
+
+    console.log(
+      await page.locator("body").innerText()
+    );
+
+    await page.screenshot({
+      path: "after-target-click.png",
+      fullPage: true,
+    });
+
+    throw new Error("目標人物面板沒有正常開啟");
+  }
 }
+
 
 async function throwItems(page) {
   console.log(`尋找道具：${ITEM_NAME}`);
