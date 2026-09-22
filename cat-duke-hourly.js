@@ -9,75 +9,17 @@ const URL =
 
 const USER_NAME = "菜阿嘎吸粉絲血";
 
-// 要丟的人
-const TARGET_NAME =
-  process.env.TARGET_NAME || "山大王";
-
-// 要丟的東西
-const ITEM_NAME = "貓黃金";
-const ITEM_EMOJI = "💩";
-
 const PIN = process.env.CAT_DUKE_PIN;
 
-// 一次丟幾次
-const MAX_PER_RUN = Number(
-  process.env.THROW_COUNT || "1"
-);
-
-// 每次丟東西之間的間隔
-// 預設 1000ms = 1 秒
-const CLICK_GAP_MS = Number(
-  process.env.CLICK_GAP_MS || "1000"
-);
-
-const sleep = (ms) =>
-  new Promise((resolve) =>
-    setTimeout(resolve, ms)
-  );
+// HEADLESS=false 可以看到瀏覽器畫面
+const HEADLESS =
+  process.env.HEADLESS !== "false";
 
 /* =========================================================
-   CONFIG CHECK
+   BASIC
 ========================================================= */
 
-if (!PIN || !/^\d{6}$/.test(PIN)) {
-  console.error(
-    "缺少 CAT_DUKE_PIN，或 PIN 不是 6 位數"
-  );
-
-  process.exit(1);
-}
-
-if (
-  !Number.isInteger(MAX_PER_RUN) ||
-  MAX_PER_RUN < 1 ||
-  MAX_PER_RUN > 100
-) {
-  console.error(
-    "THROW_COUNT 必須是 1～100 的整數"
-  );
-
-  process.exit(1);
-}
-
-if (
-  !Number.isFinite(CLICK_GAP_MS) ||
-  CLICK_GAP_MS < 100
-) {
-  console.error(
-    "CLICK_GAP_MS 不可小於 100"
-  );
-
-  process.exit(1);
-}
-
-/* =========================================================
-   SCREENSHOT
-========================================================= */
-
-async function safeScreenshot(
-  page,
-  filename
-) {
+async function safeScreenshot(page, filename) {
   try {
     await page.screenshot({
       path: filename,
@@ -89,6 +31,18 @@ async function safeScreenshot(
       error.message
     );
   }
+}
+
+/* =========================================================
+   CONFIG CHECK
+========================================================= */
+
+if (!PIN || !/^\d{6}$/.test(PIN)) {
+  console.error(
+    "❌ 缺少 CAT_DUKE_PIN，或 PIN 不是 6 位數"
+  );
+
+  process.exit(1);
 }
 
 /* =========================================================
@@ -162,8 +116,9 @@ async function login(page) {
     }
 
     const type =
-      (await input.getAttribute("type")) ||
-      "";
+      (await input.getAttribute(
+        "type"
+      )) || "";
 
     const placeholder =
       (await input.getAttribute(
@@ -184,7 +139,9 @@ async function login(page) {
 
   if (!pinInput) {
     const visibleInputs =
-      page.locator("input:visible");
+      page.locator(
+        "input:visible"
+      );
 
     if (
       (await visibleInputs.count()) === 0
@@ -200,149 +157,51 @@ async function login(page) {
 
   await pinInput.fill(PIN);
 
-  console.log("送出登入...");
-
   const loginButtons =
     page.getByRole("button", {
       name: "登入",
       exact: true,
     });
 
-  await loginButtons.last().click();
+  console.log("送出登入...");
 
-  await page.waitForTimeout(1500);
+  await loginButtons
+    .last()
+    .click();
 
-  console.log("登入流程完成");
+  await page.waitForTimeout(1800);
+
+  console.log("✅ 登入完成");
 }
 
 /* =========================================================
-   找可見的「丟東西」
+   CLICK PLAYER AVATAR
+   只負責點頭像，不檢查「丟東西」
 ========================================================= */
 
-async function getThrowControls(page) {
-  return await page.evaluate(() => {
-    const forbidden =
-      new Set([
-        "SCRIPT",
-        "STYLE",
-        "PRE",
-        "CODE",
-      ]);
-
-    const all = [
-      ...document.querySelectorAll(
-        "body *"
-      ),
-    ];
-
-    const matches = [];
-
-    for (const el of all) {
-      if (
-        forbidden.has(el.tagName)
-      ) {
-        continue;
-      }
-
-      const text =
-        (el.textContent || "").trim();
-
-      if (text !== "丟東西") {
-        continue;
-      }
-
-      const rect =
-        el.getBoundingClientRect();
-
-      const style =
-        getComputedStyle(el);
-
-      if (
-        rect.width <= 0 ||
-        rect.height <= 0 ||
-        style.display === "none" ||
-        style.visibility ===
-          "hidden" ||
-        Number(style.opacity || 1) ===
-          0
-      ) {
-        continue;
-      }
-
-      matches.push({
-        tag: el.tagName,
-
-        id:
-          el.id || "",
-
-        className:
-          typeof el.className ===
-          "string"
-            ? el.className
-            : "",
-
-        role:
-          el.getAttribute("role") ||
-          "",
-
-        x:
-          rect.left +
-          rect.width / 2,
-
-        y:
-          rect.top +
-          rect.height / 2,
-
-        width:
-          rect.width,
-
-        height:
-          rect.height,
-
-        html:
-          el.outerHTML.slice(
-            0,
-            1000
-          ),
-      });
-    }
-
-    return matches;
-  });
-}
-
-/* =========================================================
-   OPEN TARGET
-========================================================= */
-
-async function openTarget(page) {
+async function clickPlayerAvatar(
+  page,
+  playerName
+) {
   console.log(
-    `尋找目標：${TARGET_NAME}`
+    `尋找玩家：${playerName}`
   );
 
-  const targetText = page
-    .locator("text.name")
-    .filter({
-      hasText: TARGET_NAME,
-    })
-    .first();
+  const targetText =
+    page
+      .locator("text.name")
+      .filter({
+        hasText: playerName,
+      })
+      .first();
 
   await targetText.waitFor({
     state: "attached",
     timeout: 15000,
   });
 
-  console.log(
-    `找到目標文字：${TARGET_NAME}`
-  );
-
   let point = null;
 
-  /*
-   * SVG 可能還在 layout
-   *
-   * 30 × 500ms = 最多等 15 秒
-   */
   for (
     let attempt = 1;
     attempt <= 30;
@@ -359,16 +218,9 @@ async function openTarget(page) {
           }
 
           const candidates = [
-            group.querySelector(
-              "image"
-            ),
-
-            group.querySelector(
-              "circle"
-            ),
-
+            group.querySelector("image"),
+            group.querySelector("circle"),
             textEl,
-
             group,
           ].filter(Boolean);
 
@@ -414,16 +266,8 @@ async function openTarget(page) {
       );
 
     if (point) {
-      console.log(
-        `第 ${attempt} 次取得有效座標`
-      );
-
       break;
     }
-
-    console.log(
-      `第 ${attempt} 次尚未取得有效座標，等待 SVG layout...`
-    );
 
     await page.waitForTimeout(
       500
@@ -433,188 +277,90 @@ async function openTarget(page) {
   if (!point) {
     await safeScreenshot(
       page,
-      "target-coordinate-error.png"
+      "player-coordinate-error.png"
     );
 
     throw new Error(
-      `${TARGET_NAME} 找到了，但沒有有效頭像座標`
+      `${playerName} 找到了，但沒有有效座標`
     );
   }
 
   console.log(
-    `目標元素=${point.tag}, ` +
-      `x=${point.x.toFixed(1)}, ` +
-      `y=${point.y.toFixed(1)}, ` +
-      `w=${point.width.toFixed(
-        1
-      )}, ` +
-      `h=${point.height.toFixed(
-        1
-      )}`
+    `點擊 ${playerName}：` +
+    `x=${point.x.toFixed(1)}, ` +
+    `y=${point.y.toFixed(1)}`
   );
 
-  /*
-   * 真實 mouse interaction
-   *
-   * 不用 locator.click()
-   */
   await page.mouse.move(
     point.x,
     point.y
   );
 
-  await page.waitForTimeout(100);
-
-  await page.mouse.down();
-
-  await page.waitForTimeout(80);
-
-  await page.mouse.up();
-
-  console.log(
-    `已實際點擊 ${TARGET_NAME} 頭像`
-  );
-
-  /*
-   * 不能再用
-   *
-   * bodyText.includes("丟東西")
-   *
-   * 因為 script 裡本身也有此字串。
-   */
-  let controls = [];
-
-  for (
-    let attempt = 1;
-    attempt <= 15;
-    attempt++
-  ) {
-    await page.waitForTimeout(
-      300
-    );
-
-    controls =
-      await getThrowControls(
-        page
-      );
-
-    if (
-      controls.length > 0
-    ) {
-      console.log(
-        "✅ 目標操作面板已真正開啟"
-      );
-
-      return;
-    }
-  }
-
-  await safeScreenshot(
-    page,
-    "after-target-click.png"
-  );
-
-  throw new Error(
-    `點擊 ${TARGET_NAME} 後沒有出現真正的「丟東西」控制項`
-  );
-}
-
-/* =========================================================
-   OPEN THROW PANEL
-========================================================= */
-
-async function openThrowPanel(page) {
-  console.log(
-    '尋找真正的「丟東西」控制項...'
-  );
-
-  await page.waitForTimeout(500);
-
-  let controls =
-    await getThrowControls(page);
-
-  if (
-    controls.length === 0
-  ) {
-    throw new Error(
-      "找不到真正可見的「丟東西」"
-    );
-  }
-
-  console.log(
-    `找到 ${controls.length} 個「丟東西」候選元素`
-  );
-
-  for (
-    const control of controls
-  ) {
-    console.log(
-      `候選：tag=${control.tag}, ` +
-        `id=${control.id}, ` +
-        `class=${control.className}, ` +
-        `role=${control.role}`
-    );
-  }
-
-  /*
-   * 最小的可見元素通常是實際 tab/button，
-   * 而不是包住整區的父元素。
-   */
-  controls.sort(
-    (a, b) =>
-      a.width * a.height -
-      b.width * b.height
-  );
-
-  const target =
-    controls[0];
-
-  console.log(
-    `點擊「丟東西」：` +
-      `x=${target.x.toFixed(
-        1
-      )}, ` +
-      `y=${target.y.toFixed(
-        1
-      )}`
-  );
-
-  await page.mouse.move(
-    target.x,
-    target.y
-  );
-
-  await page.waitForTimeout(100);
-
-  await page.mouse.down();
-
-  await page.waitForTimeout(80);
-
-  await page.mouse.up();
-
-  console.log(
-    '已實際點擊「丟東西」'
-  );
-
-  /*
-   * 等道具 UI 展開
-   */
   await page.waitForTimeout(
-    1200
+    100
+  );
+
+  await page.mouse.down();
+
+  await page.waitForTimeout(
+    80
+  );
+
+  await page.mouse.up();
+
+  await page.waitForTimeout(
+    800
+  );
+
+  console.log(
+    `✅ 已點擊 ${playerName}`
   );
 }
 
 /* =========================================================
-   FIND CAT GOLD
+   READ RECENT RECORDS
 ========================================================= */
 
-async function findCatGold(page) {
-  const matches =
+async function readRecentRecords(page) {
+  console.log(
+    `讀取 ${USER_NAME} 右側最近紀錄...`
+  );
+
+  /*
+   * 先點自己的頭像。
+   */
+  await clickPlayerAvatar(
+    page,
+    USER_NAME
+  );
+
+  await page.waitForTimeout(
+    1000
+  );
+
+  const result =
     await page.evaluate(
-      ({
-        itemName,
-        emoji,
-      }) => {
+      (userName) => {
+        function visible(el) {
+          const rect =
+            el.getBoundingClientRect();
+
+          const style =
+            getComputedStyle(el);
+
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !==
+              "none" &&
+            style.visibility !==
+              "hidden" &&
+            Number(
+              style.opacity || 1
+            ) !== 0
+          );
+        }
+
         const forbidden =
           new Set([
             "SCRIPT",
@@ -629,7 +375,7 @@ async function findCatGold(page) {
           ),
         ];
 
-        const result = [];
+        const raw = [];
 
         for (const el of all) {
           if (
@@ -640,134 +386,103 @@ async function findCatGold(page) {
             continue;
           }
 
+          if (!visible(el)) {
+            continue;
+          }
+
           const rect =
             el.getBoundingClientRect();
 
-          const style =
-            getComputedStyle(el);
-
+          /*
+           * 依使用者描述：
+           * 最近紀錄在右側。
+           *
+           * 所以只取畫面右半部。
+           */
           if (
-            rect.width <= 0 ||
-            rect.height <= 0 ||
-            style.display ===
-              "none" ||
-            style.visibility ===
-              "hidden" ||
-            Number(
-              style.opacity || 1
-            ) === 0
+            rect.left <
+            window.innerWidth *
+              0.45
+          ) {
+            continue;
+          }
+
+          /*
+           * 排除非常巨大的 panel 父層。
+           */
+          if (
+            rect.width >
+              window.innerWidth *
+                0.55 &&
+            rect.height >
+              window.innerHeight *
+                0.7
           ) {
             continue;
           }
 
           const text =
             (
-              el.textContent || ""
-            ).trim();
+              el.innerText ||
+              el.textContent ||
+              ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim();
 
-          const title =
-            el.getAttribute(
-              "title"
-            ) || "";
-
-          const aria =
-            el.getAttribute(
-              "aria-label"
-            ) || "";
-
-          const alt =
-            el.getAttribute(
-              "alt"
-            ) || "";
-
-          const dataItem =
-            el.getAttribute(
-              "data-item"
-            ) || "";
-
-          const dataName =
-            el.getAttribute(
-              "data-name"
-            ) || "";
-
-          const nameFound =
-            title.includes(
-              itemName
-            ) ||
-            aria.includes(
-              itemName
-            ) ||
-            alt.includes(
-              itemName
-            ) ||
-            dataItem.includes(
-              itemName
-            ) ||
-            dataName.includes(
-              itemName
-            );
+          if (!text) {
+            continue;
+          }
 
           /*
-           * 貓黃金目前定義是：
-           *
-           * {id:'貓黃金', e:'💩'}
-           *
-           * 所以 UI 可能只有 💩
+           * 必須跟自己有關。
            */
-          const emojiFound =
-            text === emoji ||
-            text ===
-              `${emoji}${itemName}` ||
-            text ===
-              `${emoji} ${itemName}`;
-
           if (
-            !nameFound &&
-            !emojiFound
+            !text.includes(
+              userName
+            )
           ) {
             continue;
           }
 
-          result.push({
+          /*
+           * 必須看起來是丟東西紀錄。
+           */
+          const looksLikeThrow =
+            text.includes("丟") ||
+            text.includes("丟給") ||
+            text.includes("丟了") ||
+            text.includes("→");
+
+          if (
+            !looksLikeThrow
+          ) {
+            continue;
+          }
+
+          raw.push({
+            text,
+
             tag:
               el.tagName,
 
-            id:
-              el.id || "",
-
-            className:
-              typeof el.className ===
-              "string"
-                ? el.className
-                : "",
-
-            text,
-
-            title,
-
-            aria,
-
-            alt,
-
-            dataItem,
-
-            dataName,
-
-            named:
-              nameFound,
-
             x:
-              rect.left +
-              rect.width / 2,
+              rect.left,
 
             y:
-              rect.top +
-              rect.height / 2,
+              rect.top,
 
             width:
               rect.width,
 
             height:
+              rect.height,
+
+            area:
+              rect.width *
               rect.height,
 
             html:
@@ -778,230 +493,789 @@ async function findCatGold(page) {
           });
         }
 
-        return result;
+        /*
+         * 越上面 = 越新
+         */
+        raw.sort(
+          (a, b) =>
+            a.y - b.y
+        );
+
+        /*
+         * 去掉相同文字的父子節點。
+         */
+        const unique = [];
+
+        const seen =
+          new Set();
+
+        for (const item of raw) {
+          if (
+            seen.has(
+              item.text
+            )
+          ) {
+            continue;
+          }
+
+          seen.add(
+            item.text
+          );
+
+          unique.push(
+            item
+          );
+        }
+
+        const escapedName =
+          userName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        /*
+         * 先支援幾種可能的文字格式。
+         */
+        const patterns = [
+          new RegExp(
+            `^(.+?)\\s*丟(?:了)?\\s*(.+?)\\s*(?:給|→)\\s*${escapedName}`,
+            "u"
+          ),
+
+          new RegExp(
+            `^(.+?)\\s*(?:丟給|→)\\s*${escapedName}\\s*(.*)$`,
+            "u"
+          ),
+
+          new RegExp(
+            `^(.+?)\\s*對\\s*${escapedName}\\s*丟(?:了)?\\s*(.+)$`,
+            "u"
+          ),
+        ];
+
+        const parsed = [];
+
+        for (
+          const item of unique
+        ) {
+          let sender = null;
+          let thrownItem = null;
+
+          for (
+            const pattern
+            of patterns
+          ) {
+            const match =
+              item.text.match(
+                pattern
+              );
+
+            if (!match) {
+              continue;
+            }
+
+            sender =
+              (
+                match[1] ||
+                ""
+              )
+                .replace(
+                  /^\d{1,2}:\d{2}(?::\d{2})?\s*/,
+                  ""
+                )
+                .trim();
+
+            thrownItem =
+              (
+                match[2] ||
+                ""
+              ).trim();
+
+            break;
+          }
+
+          /*
+           * 如果 regex 沒解析成功，
+           * 保留原始紀錄供 debug。
+           */
+          if (!sender) {
+            parsed.push({
+              sender: null,
+              item: null,
+              record:
+                item.text,
+              y:
+                item.y,
+            });
+
+            continue;
+          }
+
+          /*
+           * 不把自己當攻擊者。
+           */
+          if (
+            sender === userName
+          ) {
+            continue;
+          }
+
+          parsed.push({
+            sender,
+            item:
+              thrownItem ||
+              "無法解析",
+            record:
+              item.text,
+            y:
+              item.y,
+          });
+        }
+
+        /*
+         * 已經是由上到下排序。
+         *
+         * 找第一個成功解析 sender 的紀錄。
+         */
+        const latest =
+          parsed.find(
+            (x) =>
+              x.sender
+          ) || null;
+
+        return {
+          latest,
+          parsed,
+          raw:
+            unique,
+        };
       },
-
-      {
-        itemName:
-          ITEM_NAME,
-
-        emoji:
-          ITEM_EMOJI,
-      }
+      USER_NAME
     );
+
+  console.log("");
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    `📜 丟給 ${USER_NAME} 的最近紀錄`
+  );
+
+  console.log(
+    "※ 越上面越新"
+  );
+
+  console.log(
+    "========================================"
+  );
 
   if (
-    matches.length === 0
+    result.parsed.length === 0
   ) {
-    return null;
+    console.log(
+      "沒有找到符合條件的紀錄。"
+    );
+  } else {
+    result.parsed.forEach(
+      (record, index) => {
+        console.log(
+          `[${index + 1}] ${record.record}`
+        );
+
+        if (
+          record.sender
+        ) {
+          console.log(
+            `    誰丟的：${record.sender}`
+          );
+
+          console.log(
+            `    丟什麼：${record.item}`
+          );
+        } else {
+          console.log(
+            "    ⚠️ 這筆目前無法解析"
+          );
+        }
+      }
+    );
   }
 
-  /*
-   * 排序：
-   *
-   * 1. 有明確「貓黃金」名稱的優先
-   * 2. 元素面積較小優先
-   *
-   * 可避免誤點到包含 💩 的大父容器
-   */
-  matches.sort((a, b) => {
-    if (
-      a.named !== b.named
-    ) {
-      return a.named
-        ? -1
-        : 1;
-    }
+  console.log(
+    "========================================"
+  );
 
-    return (
-      a.width *
-        a.height -
-      b.width *
-        b.height
+  if (!result.latest) {
+    await safeScreenshot(
+      page,
+      "recent-records-error.png"
     );
-  });
 
-  return {
-    selected:
-      matches[0],
+    throw new Error(
+      "找到紀錄區，但無法解析最新一筆是誰丟的"
+    );
+  }
 
-    all:
-      matches,
-  };
+  console.log("");
+  console.log(
+    "🔥 最新一筆"
+  );
+
+  console.log(
+    `誰丟的：${result.latest.sender}`
+  );
+
+  console.log(
+    `丟什麼：${result.latest.item}`
+  );
+
+  console.log(
+    `原始紀錄：${result.latest.record}`
+  );
+
+  console.log("");
+
+  return result.latest;
 }
 
 /* =========================================================
-   WAIT FOR CAT GOLD
+   THROW CONTROL
 ========================================================= */
 
-async function waitForCatGold(page) {
+async function getThrowControls(page) {
+  return await page.evaluate(() => {
+    const all = [
+      ...document.querySelectorAll(
+        "body *"
+      ),
+    ];
+
+    const result = [];
+
+    for (const el of all) {
+      const text =
+        (
+          el.textContent ||
+          ""
+        ).trim();
+
+      if (
+        text !== "丟東西"
+      ) {
+        continue;
+      }
+
+      const rect =
+        el.getBoundingClientRect();
+
+      const style =
+        getComputedStyle(el);
+
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        style.display ===
+          "none" ||
+        style.visibility ===
+          "hidden" ||
+        Number(
+          style.opacity || 1
+        ) === 0
+      ) {
+        continue;
+      }
+
+      result.push({
+        x:
+          rect.left +
+          rect.width / 2,
+
+        y:
+          rect.top +
+          rect.height / 2,
+
+        width:
+          rect.width,
+
+        height:
+          rect.height,
+
+        tag:
+          el.tagName,
+      });
+    }
+
+    return result;
+  });
+}
+
+/* =========================================================
+   OPEN THROW PANEL
+   只開面板，不丟
+========================================================= */
+
+async function openThrowPanel(page) {
   console.log(
-    `尋找道具：${ITEM_NAME}`
+    '尋找「丟東西」...'
   );
 
   for (
     let attempt = 1;
-    attempt <= 20;
+    attempt <= 15;
     attempt++
   ) {
-    const result =
-      await findCatGold(page);
+    const controls =
+      await getThrowControls(
+        page
+      );
 
     if (
-      result &&
-      result.selected
+      controls.length > 0
     ) {
-      console.log(
-        `✅ 找到 ${ITEM_NAME}`
+      controls.sort(
+        (a, b) =>
+          a.width *
+            a.height -
+          b.width *
+            b.height
       );
 
-      const item =
-        result.selected;
-
-      console.log(
-        `tag=${item.tag}, ` +
-          `text="${item.text}", ` +
-          `title="${item.title}", ` +
-          `aria="${item.aria}"`
-      );
-
-      console.log(
-        item.html
-      );
-
-      return item;
-    }
-
-    console.log(
-      `第 ${attempt} 次尚未找到 ${ITEM_NAME}，等待道具面板...`
-    );
-
-    await page.waitForTimeout(
-      500
-    );
-  }
-
-  await safeScreenshot(
-    page,
-    "throw-panel.png"
-  );
-
-  throw new Error(
-    `丟東西面板已開，但找不到 ${ITEM_NAME}`
-  );
-}
-
-/* =========================================================
-   THROW ITEMS
-========================================================= */
-
-async function throwItems(page) {
-  /*
-   * 第一次先確認道具真的存在
-   */
-  let item =
-    await waitForCatGold(page);
-
-  console.log(
-    `準備丟 ${MAX_PER_RUN} 次 ${ITEM_NAME}`
-  );
-
-  console.log(
-    `點擊間隔 ${CLICK_GAP_MS} ms`
-  );
-
-  let successCount = 0;
-
-  for (
-    let i = 0;
-    i < MAX_PER_RUN;
-    i++
-  ) {
-    try {
-      /*
-       * 每次點擊前重新取得座標。
-       *
-       * 因為有些 UI 點完後 DOM
-       * 可能重新 render。
-       */
-      if (i > 0) {
-        const result =
-          await findCatGold(
-            page
-          );
-
-        if (
-          !result ||
-          !result.selected
-        ) {
-          console.log(
-            `第 ${
-              i + 1
-            } 次前重新尋找 ${ITEM_NAME}`
-          );
-
-          item =
-            await waitForCatGold(
-              page
-            );
-        } else {
-          item =
-            result.selected;
-        }
-      }
+      const target =
+        controls[0];
 
       await page.mouse.move(
-        item.x,
-        item.y
+        target.x,
+        target.y
       );
 
       await page.waitForTimeout(
-        80
+        100
       );
 
       await page.mouse.down();
 
       await page.waitForTimeout(
-        60
+        80
       );
 
       await page.mouse.up();
 
-      successCount++;
+      await page.waitForTimeout(
+        1000
+      );
 
       console.log(
-        `已丟 ${successCount}/${MAX_PER_RUN}`
+        "✅ 已打開丟東西面板"
       );
 
-      /*
-       * 每次丟東西之間等待
-       */
-      if (
-        successCount <
-        MAX_PER_RUN
-      ) {
-        await sleep(
-          CLICK_GAP_MS
-        );
-      }
-    } catch (error) {
-      console.error(
-        `第 ${
-          i + 1
-        } 次點擊失敗：${error.message}`
-      );
-
-      await safeScreenshot(
-        page,
-        "throw-error.png"
-      );
-
-      throw error;
+      return;
     }
+
+    await page.waitForTimeout(
+      300
+    );
   }
 
+  throw new Error(
+    "找不到「丟東西」控制項"
+  );
+}
+
+/* =========================================================
+   FIND AVAILABLE ITEMS
+========================================================= */
+
+async function findAvailableItems(
+  page
+) {
+  return await page.evaluate(
+    () => {
+      function visible(el) {
+        const rect =
+          el.getBoundingClientRect();
+
+        const style =
+          getComputedStyle(el);
+
+        return (
+          rect.width > 5 &&
+          rect.height > 5 &&
+          style.display !==
+            "none" &&
+          style.visibility !==
+            "hidden" &&
+          Number(
+            style.opacity || 1
+          ) !== 0
+        );
+      }
+
+      const emojiRegex =
+        /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u;
+
+      const all = [
+        ...document.querySelectorAll(
+          "body *"
+        ),
+      ];
+
+      const candidates = [];
+
+      for (const el of all) {
+        if (!visible(el)) {
+          continue;
+        }
+
+        const rect =
+          el.getBoundingClientRect();
+
+        /*
+         * 道具通常不會是一個超大元素。
+         */
+        if (
+          rect.width > 300 ||
+          rect.height > 220
+        ) {
+          continue;
+        }
+
+        const text =
+          (
+            el.innerText ||
+            el.textContent ||
+            ""
+          ).trim();
+
+        const title =
+          el.getAttribute(
+            "title"
+          ) || "";
+
+        const aria =
+          el.getAttribute(
+            "aria-label"
+          ) || "";
+
+        const alt =
+          el.getAttribute(
+            "alt"
+          ) || "";
+
+        const dataItem =
+          el.getAttribute(
+            "data-item"
+          ) || "";
+
+        const dataName =
+          el.getAttribute(
+            "data-name"
+          ) || "";
+
+        const role =
+          el.getAttribute(
+            "role"
+          ) || "";
+
+        const name =
+          dataItem ||
+          dataName ||
+          title ||
+          aria ||
+          alt ||
+          text;
+
+        if (!name) {
+          continue;
+        }
+
+        const blocked =
+          [
+            "丟東西",
+            "關閉",
+            "取消",
+            "登入",
+            "確定",
+            "返回",
+          ];
+
+        if (
+          blocked.includes(
+            name
+          ) ||
+          blocked.includes(
+            text
+          )
+        ) {
+          continue;
+        }
+
+        const explicit =
+          Boolean(
+            dataItem ||
+            dataName
+          );
+
+        const metadata =
+          Boolean(
+            title ||
+            aria ||
+            alt
+          );
+
+        const emoji =
+          emojiRegex.test(
+            text
+          );
+
+        const button =
+          el.tagName ===
+            "BUTTON" ||
+          role === "button";
+
+        if (
+          !explicit &&
+          !metadata &&
+          !emoji &&
+          !button
+        ) {
+          continue;
+        }
+
+        candidates.push({
+          name,
+
+          text,
+
+          explicit,
+
+          x:
+            rect.left +
+            rect.width / 2,
+
+          y:
+            rect.top +
+            rect.height / 2,
+
+          width:
+            rect.width,
+
+          height:
+            rect.height,
+
+          area:
+            rect.width *
+            rect.height,
+
+          tag:
+            el.tagName,
+
+          html:
+            el.outerHTML.slice(
+              0,
+              1000
+            ),
+        });
+      }
+
+      /*
+       * 同一位置的父子元素只留一個。
+       */
+      const unique = [];
+
+      for (
+        const item
+        of candidates
+      ) {
+        const duplicate =
+          unique.some(
+            (x) =>
+              Math.abs(
+                x.x -
+                  item.x
+              ) < 3 &&
+              Math.abs(
+                x.y -
+                  item.y
+              ) < 3
+          );
+
+        if (duplicate) {
+          continue;
+        }
+
+        unique.push(
+          item
+        );
+      }
+
+      /*
+       * 明確 data-item 優先。
+       */
+      unique.sort(
+        (a, b) => {
+          if (
+            a.explicit !==
+            b.explicit
+          ) {
+            return a.explicit
+              ? -1
+              : 1;
+          }
+
+          return (
+            a.area -
+            b.area
+          );
+        }
+      );
+
+      return unique;
+    }
+  );
+}
+
+/* =========================================================
+   RANDOM PREVIEW
+   只抽，不點
+========================================================= */
+
+function chooseRandomItem(
+  items
+) {
+  if (
+    !items ||
+    items.length === 0
+  ) {
+    return null;
+  }
+
+  const index =
+    Math.floor(
+      Math.random() *
+      items.length
+    );
+
+  return items[index];
+}
+
+/* =========================================================
+   PREVIEW RETALIATION
+========================================================= */
+
+async function previewRetaliation(
+  page,
+  latest
+) {
+  const target =
+    latest.sender;
+
+  console.log("");
   console.log(
-    `✅ 完成，本次共執行 ${successCount} 次`
+    `準備檢查復仇對象：${target}`
+  );
+
+  /*
+   * 點真正要反擊的人。
+   */
+  await clickPlayerAvatar(
+    page,
+    target
+  );
+
+  /*
+   * 打開丟東西面板。
+   *
+   * 注意：
+   * 只開，不會丟。
+   */
+  await openThrowPanel(page);
+
+  await page.waitForTimeout(
+    800
+  );
+
+  const items =
+    await findAvailableItems(
+      page
+    );
+
+  console.log("");
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    "🎁 偵測到的可丟道具候選"
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  if (
+    items.length === 0
+  ) {
+    console.log(
+      "沒有找到道具候選。"
+    );
+
+    await safeScreenshot(
+      page,
+      "no-items.png"
+    );
+
+    return;
+  }
+
+  items.forEach(
+    (item, index) => {
+      console.log(
+        `[${index + 1}] ${item.name}`
+      );
+    }
+  );
+
+  const selected =
+    chooseRandomItem(
+      items
+    );
+
+  console.log("");
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    "🔥 如果現在要反擊"
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    `反擊對象：${target}`
+  );
+
+  console.log(
+    `隨機道具：${selected.name}`
+  );
+
+  console.log(
+    ""
+  );
+
+  console.log(
+    "⚠️ 本測試版不會真的點擊道具"
+  );
+
+  console.log(
+    "⚠️ 沒有執行任何丟東西動作"
+  );
+
+  console.log(
+    "========================================"
   );
 }
 
@@ -1011,24 +1285,25 @@ async function throwItems(page) {
 
 (async () => {
   console.log(
-    `本次預計丟 ${MAX_PER_RUN} 次`
+    "========================================"
   );
 
   console.log(
-    `目標：${TARGET_NAME}`
+    "Cat Duke 復仇偵測測試版"
   );
 
   console.log(
-    `道具：${ITEM_NAME}`
+    "⚠️ 本版本不會真的丟任何東西"
   );
 
   console.log(
-    `間隔：${CLICK_GAP_MS} ms`
+    "========================================"
   );
 
   const browser =
     await chromium.launch({
-      headless: true,
+      headless:
+        HEADLESS,
     });
 
   const context =
@@ -1043,20 +1318,45 @@ async function throwItems(page) {
     await context.newPage();
 
   try {
+    /*
+     * 1. 登入
+     */
     await login(page);
 
-    await openTarget(page);
+    /*
+     * 2. 點自己
+     *
+     * 3. 讀右側最近紀錄
+     *
+     * 4. 最新一筆 = 最上面
+     */
+    const latest =
+      await readRecentRecords(
+        page
+      );
 
-    await openThrowPanel(page);
+    /*
+     * 5. 點最新攻擊者
+     *
+     * 6. 開丟東西面板
+     *
+     * 7. 隨機抽一個道具
+     *
+     * 8. 只列出結果，不點
+     */
+    await previewRetaliation(
+      page,
+      latest
+    );
 
-    await throwItems(page);
-
+    console.log("");
     console.log(
-      "✅ 任務完成"
+      "✅ 偵測測試完成"
     );
   } catch (error) {
+    console.error("");
     console.error(
-      "❌ 執行失敗："
+      "❌ 執行失敗"
     );
 
     console.error(error);

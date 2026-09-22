@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 8
 
     container:
-        image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
 
     steps:
       - name: Checkout repository
@@ -33,11 +33,8 @@ jobs:
         env:
           CAT_DUKE_PIN: ${{ secrets.CAT_DUKE_PIN }}
 
-          TARGET_NAME: 山大王
-
           THROW_COUNT: 100
 
-          # 每次間隔 1 秒
           CLICK_GAP_MS: 1000
 
         run: npm start
@@ -53,6 +50,8 @@ jobs:
             target-coordinate-error.png
             throw-panel.png
             throw-error.png
-            no-throw-control.png
+            no-throw-history.png
+            throw-panel-no-items.png
+            throw-random-error.png
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 1
