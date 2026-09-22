@@ -481,94 +481,231 @@ async function clickPlayerAvatar(
    WAIT FOR RECENT PANEL
 ========================================================= */
 
-async function waitForRecentPanel(
+/* =========================================================
+   WAIT FOR SELF PANEL
+========================================================= */
+
+async function waitForSelfPanel(
   page
 ) {
   console.log(
-    "等待右側最近紀錄面板..."
+    "等待右側自己的個人面板..."
   );
 
+  /*
+   * 總共兩輪。
+   *
+   * 第一輪如果沒出現，
+   * 再點一次自己的頭像。
+   */
   for (
-    let attempt = 1;
-    attempt <= 20;
-    attempt++
+    let round = 1;
+    round <= 2;
+    round++
   ) {
-    const found =
-      await page.evaluate(() => {
-        const all = [
-          ...document.querySelectorAll(
-            "body *"
-          ),
-        ];
+    for (
+      let attempt = 1;
+      attempt <= 12;
+      attempt++
+    ) {
+      const result =
+        await page.evaluate(
+          (userName) => {
+            const all = [
+              ...document.querySelectorAll(
+                "body *"
+              ),
+            ];
 
-        for (
-          const el of all
-        ) {
-          const rect =
-            el.getBoundingClientRect();
+            function visible(el) {
+              const rect =
+                el.getBoundingClientRect();
 
-          const style =
-            getComputedStyle(el);
+              const style =
+                getComputedStyle(el);
 
-          const visible =
-            rect.width > 0 &&
-            rect.height > 0 &&
-            style.display !==
-              "none" &&
-            style.visibility !==
-              "hidden" &&
-            Number(
-              style.opacity || 1
-            ) !== 0;
+              return (
+                rect.width > 0 &&
+                rect.height > 0 &&
+                style.display !== "none" &&
+                style.visibility !== "hidden" &&
+                Number(
+                  style.opacity || 1
+                ) !== 0
+              );
+            }
 
-          if (!visible) {
-            continue;
-          }
+            /*
+             * 右側個人面板目前已知會包含：
+             *
+             * 玩家名
+             * 便條
+             * 紀錄
+             * 關係
+             * 今天被丟
+             *
+             * 不再要求一定有「最近紀錄」。
+             */
+            for (const el of all) {
+              if (!visible(el)) {
+                continue;
+              }
 
-          const text =
-            (
-              el.innerText ||
-              el.textContent ||
-              ""
-            )
-              .replace(
-                /\s+/g,
-                " "
-              )
-              .trim();
+              const rect =
+                el.getBoundingClientRect();
 
-          if (
-            text.includes(
-              "最近紀錄"
-            )
-          ) {
-            return true;
-          }
-        }
+              /*
+               * 個人資料 panel 在右側。
+               */
+              if (
+                rect.left <
+                window.innerWidth *
+                  0.4
+              ) {
+                continue;
+              }
 
-        return false;
-      });
+              const text =
+                (
+                  el.innerText ||
+                  el.textContent ||
+                  ""
+                )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
 
-    if (found) {
+              if (
+                !text.includes(
+                  userName
+                )
+              ) {
+                continue;
+              }
+
+              const markers = [
+                "今天被丟",
+                "便條",
+                "紀錄",
+                "關係",
+              ];
+
+              const markerCount =
+                markers.filter(
+                  (marker) =>
+                    text.includes(
+                      marker
+                    )
+                ).length;
+
+              /*
+               * 至少命中兩個 panel 特徵，
+               * 避免只抓到玩家名字。
+               */
+              if (
+                markerCount >= 2
+              ) {
+                return {
+                  found: true,
+
+                  hasRecentRecords:
+                    text.includes(
+                      "最近紀錄"
+                    ),
+
+                  hasThrowRecord:
+                    text.includes(
+                      "丟了"
+                    ),
+
+                  preview:
+                    text.slice(
+                      0,
+                      800
+                    ),
+                };
+              }
+            }
+
+            return {
+              found: false,
+
+              hasRecentRecords:
+                false,
+
+              hasThrowRecord:
+                false,
+            };
+          },
+          USER_NAME
+        );
+
+      if (
+        result.found
+      ) {
+        console.log(
+          `✅ 右側個人面板已出現`
+        );
+
+        console.log(
+          `   最近紀錄區：${
+            result.hasRecentRecords
+              ? "有"
+              : "無"
+          }`
+        );
+
+        console.log(
+          `   被丟紀錄：${
+            result.hasThrowRecord
+              ? "有"
+              : "無"
+          }`
+        );
+
+        return result;
+      }
+
       console.log(
-        `✅ 最近紀錄面板已出現，第 ${attempt} 次確認成功`
+        `第 ${attempt} 次尚未看到右側個人面板...`
       );
 
-      return;
+      await page.waitForTimeout(
+        500
+      );
     }
 
-    await page.waitForTimeout(
-      500
-    );
+    /*
+     * 第一輪沒成功，
+     * 再點一次自己。
+     */
+    if (
+      round === 1
+    ) {
+      console.log(
+        "⚠️ 第一次點擊後沒有看到個人面板，重新點擊自己..."
+      );
+
+      await clickPlayerAvatar(
+        page,
+        USER_NAME
+      );
+
+      await page.waitForTimeout(
+        500
+      );
+    }
   }
 
   await safeScreenshot(
     page,
-    "recent-panel-timeout.png"
+    "self-panel-timeout.png"
   );
 
   throw new Error(
-    "點擊自己後，10 秒內仍未出現最近紀錄面板"
+    "點擊自己後仍無法開啟右側個人面板"
   );
 }
 
@@ -583,18 +720,56 @@ async function readRecentRecords(
     `讀取 ${USER_NAME} 右側最近紀錄...`
   );
 
-  await clickPlayerAvatar(
-    page,
-    USER_NAME
-  );
+await clickPlayerAvatar(
+  page,
+  USER_NAME
+);
 
-  await waitForRecentPanel(
+/*
+ * 等的是「自己的個人面板」，
+ * 不再要求一定存在最近紀錄。
+ */
+const selfPanel =
+  await waitForSelfPanel(
     page
   );
 
-  await page.waitForTimeout(
-    500
+await page.waitForTimeout(
+  500
+);
+
+/*
+ * 個人面板正常，
+ * 但完全沒有丟東西紀錄。
+ *
+ * 這就是「沒人丟你」。
+ */
+if (
+  !selfPanel.hasThrowRecord
+) {
+  console.log("");
+  console.log(
+    "========================================"
   );
+
+  console.log(
+    "ℹ️ 右側個人面板已正常開啟"
+  );
+
+  console.log(
+    "ℹ️ 目前沒有任何人丟東西給你"
+  );
+
+  console.log(
+    "ℹ️ 本次不執行反擊"
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  return null;
+}
 
   const result =
     await page.evaluate(() => {
