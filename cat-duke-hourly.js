@@ -256,48 +256,51 @@ async function openThrowPanel(page) {
 
 
 async function throwItems(page) {
-  console.log(`尋找道具：${ITEM_NAME}`);
+  console.log("檢查「丟東西」面板內容...");
 
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1500);
 
-  const item = page
-    .getByText(ITEM_NAME, {
-      exact: false,
-    })
-    .first();
+  const buttons = await page.locator("button").allTextContents();
+  console.log("BUTTONS:");
+  console.log(buttons);
 
-  await item.waitFor({
-    state: "visible",
-    timeout: 10000,
-  });
+  const bodyText = await page.locator("body").innerText();
+  console.log("BODY TEXT:");
+  console.log(bodyText);
 
-  console.log(`找到道具：${ITEM_NAME}`);
-  console.log(`準備丟 ${MAX_PER_RUN} 次`);
+  const html = await page.locator("body").innerHTML();
 
-  let successCount = 0;
+  console.log("搜尋可能的道具相關 HTML:");
 
-  for (let i = 0; i < MAX_PER_RUN; i++) {
-    try {
-      await item.click({
-        force: true,
-        timeout: 3000,
-      });
+  const keywords = [
+    "貓黃金",
+    "黃金",
+    "💩",
+    "throw",
+    "item",
+  ];
 
-      successCount++;
+  for (const keyword of keywords) {
+    const index = html.indexOf(keyword);
 
-      console.log(`已丟 ${successCount}/${MAX_PER_RUN}`);
+    console.log(`KEYWORD [${keyword}] index=${index}`);
 
-      await sleep(CLICK_GAP_MS);
-    } catch (error) {
-      console.error(
-        `第 ${i + 1} 次點擊失敗：${error.message}`
+    if (index >= 0) {
+      console.log(
+        html.slice(
+          Math.max(0, index - 1000),
+          Math.min(html.length, index + 2000)
+        )
       );
-
-      break;
     }
   }
 
-  console.log(`完成，本次共執行 ${successCount} 次`);
+  await page.screenshot({
+    path: "throw-panel.png",
+    fullPage: true,
+  });
+
+  throw new Error("DEBUG: 已輸出丟東西面板 DOM");
 }
 
 (async () => {
