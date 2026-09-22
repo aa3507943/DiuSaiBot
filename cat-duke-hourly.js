@@ -138,54 +138,64 @@ async function openTarget(page) {
     .first();
 
   await targetText.waitFor({
-    state: "visible",
+    state: "attached",
     timeout: 15000,
   });
 
   console.log(`找到目標文字：${TARGET_NAME}`);
 
-  // 找這個名字所屬的 SVG group
-  const targetGroup = targetText.locator("xpath=ancestor::g[1]");
+  const point = await targetText.evaluate((textEl) => {
+    const group = textEl.closest("g");
 
-  // 優先點頭像 image / circle，而不是名字文字
-  let clickable = targetGroup.locator("image").first();
+    if (!group) {
+      throw new Error("找不到目標所屬的 SVG group");
+    }
 
-  if (
-    !(await clickable.count()) ||
-    !(await clickable.isVisible().catch(() => false))
-  ) {
-    clickable = targetGroup.locator("circle").first();
-  }
+    // 優先找頭像 image
+    let clickable = group.querySelector("image");
 
-  if (
-    !(await clickable.count()) ||
-    !(await clickable.isVisible().catch(() => false))
-  ) {
-    clickable = targetGroup;
-  }
+    // 沒有 image 就找 circle
+    if (!clickable) {
+      clickable = group.querySelector("circle");
+    }
 
-  // 不使用 locator.click()
-  // 因為 D3 節點持續移動會被 Playwright 判斷為 unstable
-  const box = await clickable.boundingBox();
+    // 再沒有就直接用 group
+    if (!clickable) {
+      clickable = group;
+    }
 
-  if (!box) {
-    throw new Error(`無法取得 ${TARGET_NAME} 頭像座標`);
-  }
+    const rect = clickable.getBoundingClientRect();
 
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
+    if (!rect || rect.width === 0 || rect.height === 0) {
+      throw new Error("目標頭像沒有有效座標");
+    }
+
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+      width: rect.width,
+      height: rect.height,
+      tag: clickable.tagName,
+    };
+  });
 
   console.log(
-    `準備點擊 ${TARGET_NAME} 頭像座標：x=${x.toFixed(1)}, y=${y.toFixed(1)}`
+    `目標元素=${point.tag}, x=${point.x.toFixed(1)}, y=${point.y.toFixed(1)}, ` +
+    `w=${point.width.toFixed(1)}, h=${point.height.toFixed(1)}`
   );
 
-  await page.mouse.click(x, y);
+  await page.mouse.move(point.x, point.y);
+
+  await page.waitForTimeout(100);
+
+  await page.mouse.down();
+  await page.waitForTimeout(80);
+  await page.mouse.up();
 
   console.log(`已實際點擊 ${TARGET_NAME} 頭像`);
 
   await page.waitForTimeout(1200);
 
-  // 驗證右側操作介面是否真的打開
   const bodyText = await page.locator("body").innerText();
 
   if (bodyText.includes("丟東西")) {
@@ -197,6 +207,8 @@ async function openTarget(page) {
       path: "after-target-click.png",
       fullPage: true,
     });
+
+    throw new Error("點擊目標後，右側操作面板沒有開啟");
   }
 }
 
