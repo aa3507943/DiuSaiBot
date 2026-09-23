@@ -35,7 +35,7 @@ jobs:
 
           THROW_COUNT: 100
 
-          CLICK_GAP_MS: 1000
+          CLICK_GAP_MS: 2000
 
         run: npm start
 

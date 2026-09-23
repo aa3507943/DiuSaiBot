@@ -18,7 +18,7 @@ const HEADLESS =
 
 const THROW_COUNT =
   Number(
-    process.env.THROW_COUNT || "1"
+    process.env.THROW_COUNT || "100"
   );
 
 const CLICK_GAP_MS =
